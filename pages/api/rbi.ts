@@ -16,7 +16,7 @@ export default async function handler(
   res: NextApiResponse<ApiResponse>
 ) {
   try {
-    const response = await fetch("http://127.0.0.1:5000/scrape"); // Calls Flask API
+    const response = await fetch("http://148.135.138.22/rbi/scrape"); // Calls Flask API
     const data = await response.json();
 
     if (!response.ok) {
