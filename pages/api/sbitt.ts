@@ -6,7 +6,7 @@ export default async function handler(
 ) {
   try {
     // ✅ Correct Flask API URL
-    const response = await fetch("http://127.0.0.1:5001/scrape-sbi-tt");
+    const response = await fetch("http://novexpro.co/sbitt/scrape-sbi-tt");
 
     // ✅ Read raw response
     const text = await response.text();
