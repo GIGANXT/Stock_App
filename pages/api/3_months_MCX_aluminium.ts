@@ -17,7 +17,7 @@ export const useAluminiumStream = () => {
   const [data, setData] = useState<PriceData | null>(null);
 
   useEffect(() => {
-    const eventSource = new EventSource("http://localhost:5002/stream");
+    const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
 
     eventSource.onmessage = (event) => {
       try {
