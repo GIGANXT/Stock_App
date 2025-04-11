@@ -6,7 +6,7 @@ export default async function handler(
 ) {
   try {
     // Correct Flask API URL
-    const response = await fetch("http://localhost:5003/data");
+    const response = await fetch("http://148.135.138.22/aluminium/stream");
 
     // Read raw response
     const text = await response.text();
