@@ -34,6 +34,48 @@ export default function MCXAluminium() {
 
   // Set up initial fetch and polling
   useEffect(() => {
+    // Fetch data from the API endpoint
+    const fetchData = async () => {
+      try {
+        setIsRefreshing(true);
+        const response = await fetch('/api/3_months_MCX_aluminium', {
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        const data = await response.json();
+        
+        // Check if we received an error from the server
+        if (!response.ok) {
+          const errorMessage = data.error || 'Failed to fetch data';
+          const details = data.details ? `: ${data.details}` : '';
+          throw new Error(`${errorMessage}${details}`);
+        }
+        
+        // Validate the data structure
+        if (!data || !data.prices || Object.keys(data.prices).length === 0) {
+          throw new Error('Invalid data structure received from API');
+        }
+        
+        setStreamData(data);
+        setLastUpdated(new Date());
+        setConnectionError(null);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
+        setConnectionError(`${errorMessage} - retrying in 10 seconds...`);
+        
+        // Only clear data if we haven't received any yet
+        if (!streamData) {
+          setStreamData(null);
+        }
+      } finally {
+        setIsRefreshing(false);
+      }
+    };
+
     // Initial fetch
     fetchData();
 
@@ -44,53 +86,53 @@ export default function MCXAluminium() {
     return () => {
       clearInterval(intervalId);
     };
-  }, []);
-
-  // Fetch data from the API endpoint
-  const fetchData = async () => {
-    try {
-      setIsRefreshing(true);
-      const response = await fetch('/api/3_months_MCX_aluminium', {
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
-      });
-      
-      const data = await response.json();
-      
-      // Check if we received an error from the server
-      if (!response.ok) {
-        const errorMessage = data.error || 'Failed to fetch data';
-        const details = data.details ? `: ${data.details}` : '';
-        throw new Error(`${errorMessage}${details}`);
-      }
-      
-      // Validate the data structure
-      if (!data || !data.prices || Object.keys(data.prices).length === 0) {
-        throw new Error('Invalid data structure received from API');
-      }
-      
-      setStreamData(data);
-      setLastUpdated(new Date());
-      setConnectionError(null);
-    } catch (err: any) {
-      console.error('Error fetching data:', err);
-      const errorMessage = err.message || 'Failed to load data';
-      setConnectionError(`${errorMessage} - retrying in 10 seconds...`);
-      
-      // Only clear data if we haven't received any yet
-      if (!streamData) {
-        setStreamData(null);
-      }
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  }, []); // Empty dependency array since we don't use any external variables
 
   // Handle manual refresh
   const handleRefresh = () => {
     if (!isRefreshing) {
+      // Define fetchData again for the manual refresh
+      const fetchData = async () => {
+        try {
+          setIsRefreshing(true);
+          const response = await fetch('/api/3_months_MCX_aluminium', {
+            headers: {
+              'Accept': 'application/json',
+              'Cache-Control': 'no-cache'
+            }
+          });
+          
+          const data = await response.json();
+          
+          // Check if we received an error from the server
+          if (!response.ok) {
+            const errorMessage = data.error || 'Failed to fetch data';
+            const details = data.details ? `: ${data.details}` : '';
+            throw new Error(`${errorMessage}${details}`);
+          }
+          
+          // Validate the data structure
+          if (!data || !data.prices || Object.keys(data.prices).length === 0) {
+            throw new Error('Invalid data structure received from API');
+          }
+          
+          setStreamData(data);
+          setLastUpdated(new Date());
+          setConnectionError(null);
+        } catch (error) {
+          console.error('Error fetching data:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
+          setConnectionError(`${errorMessage} - retrying in 10 seconds...`);
+          
+          // Only clear data if we haven't received any yet
+          if (!streamData) {
+            setStreamData(null);
+          }
+        } finally {
+          setIsRefreshing(false);
+        }
+      };
+      
       fetchData();
     }
   };

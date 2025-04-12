@@ -142,12 +142,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Server error:', error);
     if (!res.writableEnded) {
       res.status(500).json({
         error: 'Failed to establish connection',
-        details: error.message
+        details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
