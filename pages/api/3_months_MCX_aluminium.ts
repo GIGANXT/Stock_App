@@ -1,5 +1,6 @@
 // hooks/useAluminiumStream.ts
 import { useEffect, useState } from "react";
+import { NextApiRequest, NextApiResponse } from 'next';
 
 export interface PriceData {
   date: string;
@@ -40,3 +41,42 @@ export const useAluminiumStream = () => {
 
   return data;
 };
+
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method === 'GET') {
+    // Set headers for SSE
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    // Create a new EventSource connection to the external service
+    const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
+
+    // Forward messages from the external service to the client
+    eventSource.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        res.write(`data: ${JSON.stringify(parsed)}\n\n`);
+      } catch (error) {
+        console.error("Error parsing SSE data:", error);
+        res.write(`data: ${JSON.stringify({ error: "Error parsing data" })}\n\n`);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("SSE error:", err);
+      res.write(`data: ${JSON.stringify({ error: "Connection error" })}\n\n`);
+      eventSource.close();
+    };
+
+    // Clean up when the client disconnects
+    req.on('close', () => {
+      eventSource.close();
+      res.end();
+    });
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
+  }
+}

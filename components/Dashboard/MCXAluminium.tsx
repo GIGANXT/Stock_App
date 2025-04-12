@@ -27,11 +27,17 @@ export default function MCXAluminium() {
   // Handle refresh button click
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // Create a new EventSource connection
-    const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
+    // Create a new EventSource connection to our API endpoint
+    const eventSource = new EventSource("/api/3_months_MCX_aluminium");
     eventSource.onmessage = (event) => {
       try {
         const parsed = JSON.parse(event.data);
+        if (parsed.error) {
+          setConnectionError(parsed.error);
+          setIsRefreshing(false);
+          eventSource.close();
+          return;
+        }
         setLastUpdated(new Date());
         setConnectionError(null);
         setIsPolling(false);
