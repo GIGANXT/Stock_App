@@ -93,25 +93,20 @@ export default function MCXAluminium() {
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [sampleData]);
+
+  // Helper function to set up polling fallback
+  const fallbackToPolling = useCallback(() => {
+    setIsPolling(true);
+    // Use sample data directly without trying HTTP
+    fetchDataWithFetch(true);
+  }, [fetchDataWithFetch]);
 
   // Set up event source for streaming data with fallback to regular polling
   useEffect(() => {
     // First try using Server-Sent Events
     let eventSource: EventSource | null = null;
     let pollingInterval: NodeJS.Timeout | null = null;
-
-    // Helper function to set up polling fallback
-    const fallbackToPolling = useCallback(() => {
-      setIsPolling(true);
-      // Use sample data directly without trying HTTP
-      fetchDataWithFetch(true);
-
-      // Set up polling every 30 seconds if not already
-      if (!pollingInterval) {
-        pollingInterval = setInterval(() => fetchDataWithFetch(true), 30000);
-      }
-    }, [fetchDataWithFetch]);
 
     try {
       // Check if EventSource is supported by the browser
@@ -155,6 +150,11 @@ export default function MCXAluminium() {
       fallbackToPolling();
     }
 
+    // Set up polling interval
+    if (!pollingInterval) {
+      pollingInterval = setInterval(() => fetchDataWithFetch(true), 30000);
+    }
+
     return () => {
       // Clean up both SSE and polling when component unmounts
       if (eventSource) {
@@ -164,7 +164,7 @@ export default function MCXAluminium() {
         clearInterval(pollingInterval);
       }
     };
-  }, [fetchDataWithFetch]);
+  }, [fetchDataWithFetch, fallbackToPolling]);
 
   // Handle refresh button click
   const handleRefresh = () => {
