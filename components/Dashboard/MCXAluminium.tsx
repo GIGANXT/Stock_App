@@ -11,20 +11,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import MCXClock from "./MCXClock";
-import { useAluminiumStream } from "../../pages/api/3_months_MCX_aluminium";
-
-interface AluminiumPriceData {
-  price: string | number;
-  site_rate_change: string;
-}
-
-interface AluminiumStreamData {
-  prices: {
-    [key: string]: AluminiumPriceData;
-  };
-  date: string;
-  time: string;
-}
+import { useAluminiumStream, PriceData } from "../../pages/api/3_months_MCX_aluminium";
 
 export default function MCXAluminium() {
   // State to hold the streaming data
@@ -35,7 +22,7 @@ export default function MCXAluminium() {
   const [isPolling, setIsPolling] = useState(false);
 
   // Use the aluminium stream hook
-  const streamData = useAluminiumStream() as AluminiumStreamData | null;
+  const streamData = useAluminiumStream();
 
   // Handle refresh button click
   const handleRefresh = () => {
