@@ -39,16 +39,31 @@ export default function MCXAluminium() {
     // Close existing connection if any
     if (eventSource) {
       eventSource.close();
+      setEventSource(null);
     }
 
     try {
       // Connect to the SSE endpoint
-      const newEventSource = new EventSource('/api/3_months_MCX_aluminium');
+      const newEventSource = new EventSource('/api/3_months_MCX_aluminium', {
+        withCredentials: false // Important for CORS
+      });
       setEventSource(newEventSource);
+
+      // Connection opened
+      newEventSource.onopen = () => {
+        console.log('SSE connection opened');
+        setConnectionError(null);
+      };
 
       newEventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data.error) {
+            console.error('Server sent error:', data.error);
+            setConnectionError(data.error);
+            setIsRefreshing(false);
+            return;
+          }
           setStreamData(data);
           setLastUpdated(new Date());
           setConnectionError(null);
@@ -80,7 +95,7 @@ export default function MCXAluminium() {
     }
   };
 
-  // Set up initial connection
+  // Set up initial connection and handle reconnection
   useEffect(() => {
     connectSSE();
 
@@ -88,12 +103,14 @@ export default function MCXAluminium() {
     return () => {
       if (eventSource) {
         eventSource.close();
+        setEventSource(null);
       }
     };
   }, []); // Empty dependency array since we only want to set up once
 
-  // Handle manual refresh
+  // Handle manual refresh with debounce
   const handleRefresh = () => {
+    if (isRefreshing) return; // Prevent multiple refreshes
     setIsRefreshing(true);
     connectSSE();
   };
