@@ -36,7 +36,7 @@ export default function MCXAluminium() {
   const fetchData = async () => {
     try {
       setIsRefreshing(true);
-      const response = await fetch('http://148.135.138.22/mcx-aluminium/stream');
+      const response = await fetch('/api/3_months_MCX_aluminium');
       
       if (!response.ok) {
         throw new Error('Failed to fetch data');
