@@ -1,165 +1,40 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { EventSource } from 'eventsource';
-
-interface SSEData {
-  Value: string;
-  "Time span": string;
-  "Rate of Change": string;
-  Timestamp: string;
-  error: null | string;
-}
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  let eventSource: EventSource | null = null;
-
   try {
-    // First check if the external service is available
+    // Correct Flask API URL
+    const response = await fetch("http://148.135.138.22/aluminium/stream");
+
+    // Read raw response
+    const text = await response.text();
+
+    // Debug log
+    console.log("🔍 Raw response from Flask:", text);
+
+    // Try parsing JSON
+    let data;
     try {
-      const checkResponse = await fetch('http://148.135.138.22/aluminium/health');
-      if (!checkResponse.ok) {
-        throw new Error('External service is not available');
-      }
-    } catch (error) {
-      console.error('External service check failed:', error);
-      return res.status(503).json({
-        error: 'External service is currently unavailable',
-        details: error instanceof Error ? error.message : 'Connection failed'
-      });
+      data = JSON.parse(text);
+    } catch (jsonError) {
+      console.error("🚨 Error parsing JSON:", jsonError);
+      return res.status(500).json({ error: "Invalid JSON from Flask API" });
     }
 
-    // Set headers for SSE
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
-    // Create EventSource connection
-    eventSource = new EventSource('http://148.135.138.22/aluminium/stream');
-
-    let isFirstConnection = true;
-    let connectionTimeout: NodeJS.Timeout;
-    let retryCount = 0;
-    const MAX_RETRIES = 3;
-
-    // Set initial connection timeout
-    connectionTimeout = setTimeout(() => {
-      if (isFirstConnection) {
-        console.error('Initial connection timeout');
-        if (eventSource) {
-          eventSource.close();
-        }
-        if (!res.writableEnded) {
-          res.status(504).json({ 
-            error: 'Connection timeout',
-            details: 'Failed to establish connection with external service'
-          });
-        }
-      }
-    }, 5000); // 5 second initial connection timeout
-
-    // Handle connection open
-    eventSource.onopen = () => {
-      console.log('SSE Connection opened for LME Aluminium');
-      isFirstConnection = false;
-      retryCount = 0;
-      clearTimeout(connectionTimeout);
-    };
-
-    // Handle incoming messages
-    eventSource.onmessage = (event: MessageEvent) => {
-      try {
-        const rawData = JSON.parse(event.data);
-        if (rawData && rawData.data) {
-          const data: SSEData = {
-            Value: rawData.data.Value || "0",
-            "Time span": rawData.data["Time span"] || new Date().toISOString(),
-            "Rate of Change": rawData.data["Rate of Change"] || "0 ((0%))",
-            Timestamp: rawData.data.Timestamp || new Date().toISOString(),
-            error: null
-          };
-          
-          if (!res.writableEnded) {
-            res.write(`data: ${JSON.stringify({ success: true, data })}\n\n`);
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing LME message:', error);
-        if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({ 
-            error: 'Invalid data format',
-            details: error instanceof Error ? error.message : 'Parse error'
-          })}\n\n`);
-        }
-      }
-    };
-
-    // Handle errors
-    eventSource.onerror = (event: Event) => {
-      const error = event as ErrorEvent;
-      console.error('SSE Error:', error);
-      
-      retryCount++;
-      if (retryCount >= MAX_RETRIES) {
-        if (eventSource) {
-          eventSource.close();
-        }
-        if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({ 
-            error: 'Connection failed after multiple retries',
-            details: error.message || 'Connection failed'
-          })}\n\n`);
-          res.end();
-        }
-      } else {
-        if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({ 
-            error: `Connection error - retrying (${retryCount}/${MAX_RETRIES})`,
-            details: error.message || 'Connection failed'
-          })}\n\n`);
-        }
-      }
-    };
-
-    // Handle client disconnect
-    req.on('close', () => {
-      clearTimeout(connectionTimeout);
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-      if (!res.writableEnded) {
-        res.end();
-      }
-    });
-
-  } catch (error: any) {
-    // Clean up EventSource if it exists
-    if (eventSource) {
-      eventSource.close();
+    // Check if API response is OK
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} - ${response.statusText}`);
     }
-    
-    console.error('Server error:', error);
-    if (!res.writableEnded) {
-      res.status(500).json({
-        error: 'Internal server error',
-        details: error.message || 'Unknown error occurred'
-      });
-    }
+
+    // Important: Always send a response
+    return res.status(200).json({ success: true, data: data.data });
+  } catch (error: unknown) {
+    console.error("🚨 Error fetching aluminum price:", error instanceof Error ? error.message : String(error));
+
+    // Important: Send error response
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 }
 
