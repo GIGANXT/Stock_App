@@ -11,168 +11,44 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import MCXClock from "./MCXClock";
-
-// Interface for the price data structure
-interface PriceData {
-  date: string;
-  time: string;
-  timestamp: string;
-  prices: {
-    [month: string]: {
-      price: number | string;
-      site_rate_change: string;
-    };
-  };
-}
+import { useAluminiumStream, PriceData } from "../../pages/api/3_months_MCX_aluminium";
 
 export default function MCXAluminium() {
   // State to hold the streaming data
-  const [streamData, setStreamData] = useState<PriceData | null>(null);
   const [showExpanded, setShowExpanded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
 
-  // Use a direct connection to your streaming server
-  const sseUrl = "http://localhost:5002/stream"; // Your actual SSE stream URL
-  
-  const sampleData = useMemo<PriceData>(() => ({
-    date: format(new Date(), "yyyy-MM-dd"),
-    time: format(new Date(), "HH:mm:ss"),
-    timestamp: new Date().toISOString(),
-    prices: {
-      "April 2025": {
-        price: 232.25,
-        site_rate_change: "-6.2 (-2.6%)",
-      },
-      "May 2025": {
-        price: 232.8,
-        site_rate_change: "-6.2 (-2.59%)",
-      },
-      "June 2025": {
-        price: 234.2,
-        site_rate_change: "-6.95 (-2.88%)",
-      },
-    },
-  }), []); // Empty dependency array since the data is static
-
-  // Fetch data using regular HTTP request as fallback
-  const fetchDataWithFetch = useCallback(async (useSampleFallback: boolean = false) => {
-    try {
-      setIsRefreshing(true);
-
-      if (useSampleFallback) {
-        // Use sample data if we were told to skip the HTTP request
-        console.log("Using sample fallback data");
-        setStreamData(sampleData);
-        setLastUpdated(new Date());
-        setConnectionError("Using demo data - API is unavailable");
-        return;
-      }
-
-      // Try to fetch from the same URL but with a regular HTTP request
-      const response = await fetch(sseUrl);
-      if (!response.ok) {
-        console.error(`HTTP error! status: ${response.status}`);
-        // If HTTP request fails, use sample data as ultimate fallback
-        setStreamData(sampleData);
-        setLastUpdated(new Date());
-        setConnectionError("API is currently unavailable - using demo data");
-      } else {
-        const data = await response.json();
-        setStreamData(data);
-        setLastUpdated(new Date());
-        setConnectionError(null);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      // Use sample data if fetch fails completely
-      setStreamData(sampleData);
-      setLastUpdated(new Date());
-      setConnectionError("API is currently unavailable - using demo data");
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [sseUrl, sampleData]);
-
-  // Set up event source for streaming data with fallback to regular polling
-  useEffect(() => {
-    // First try using Server-Sent Events
-    let eventSource: EventSource | null = null;
-    let pollingInterval: NodeJS.Timeout | null = null;
-
-    try {
-      // Check if EventSource is supported by the browser
-      if (typeof EventSource !== "undefined") {
-        // Connect directly to your streaming server
-        eventSource = new EventSource(sseUrl);
-
-        eventSource.onmessage = (event) => {
-          try {
-            const parsed = JSON.parse(event.data);
-            setStreamData(parsed);
-            setLastUpdated(new Date());
-            setConnectionError(null);
-            setIsPolling(false);
-          } catch (error) {
-            console.error("Error parsing SSE data:", error);
-            setConnectionError("Error parsing data from server");
-
-            // Fall back to HTTP polling with sample data
-            fallbackToPolling();
-          }
-        };
-
-        eventSource.onerror = (err) => {
-          console.error("SSE error - falling back to polling:", err);
-          if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-          }
-
-          // Fall back to polling
-          fallbackToPolling();
-        };
-      } else {
-        // EventSource not supported, fallback immediately
-        console.log("EventSource not supported in this browser");
-        fallbackToPolling();
-      }
-    } catch (error) {
-      console.error("Error setting up EventSource:", error);
-      fallbackToPolling();
-    }
-
-    // Helper function to set up polling fallback
-    function fallbackToPolling() {
-      setIsPolling(true);
-      // Use sample data directly without trying HTTP
-      fetchDataWithFetch(true);
-
-      // Set up polling every 30 seconds if not already
-      if (!pollingInterval) {
-        pollingInterval = setInterval(() => fetchDataWithFetch(true), 30000);
-      }
-    }
-
-    return () => {
-      // Clean up both SSE and polling when component unmounts
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [fetchDataWithFetch]);
+  // Use the aluminium stream hook
+  const streamData = useAluminiumStream();
 
   // Handle refresh button click
   const handleRefresh = () => {
     setIsRefreshing(true);
-
-    // Refresh using sample data in demo mode
-    fetchDataWithFetch(isPolling);
+    // Create a new EventSource connection
+    const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
+    eventSource.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        setLastUpdated(new Date());
+        setConnectionError(null);
+        setIsPolling(false);
+        setIsRefreshing(false);
+        eventSource.close();
+      } catch (error) {
+        console.error("Error parsing SSE data:", error);
+        setConnectionError("Error parsing data from server");
+        setIsRefreshing(false);
+        eventSource.close();
+      }
+    };
+    eventSource.onerror = () => {
+      setConnectionError("Error connecting to server");
+      setIsRefreshing(false);
+      eventSource.close();
+    };
   };
 
   // Show loading if no data is available yet
@@ -190,7 +66,7 @@ export default function MCXAluminium() {
           </p>
           {connectionError && (
             <button
-              onClick={() => fetchDataWithFetch(true)}
+              onClick={handleRefresh}
               className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 transition-colors"
             >
               Load Demo Data
