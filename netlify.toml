@@ -1,9 +1,10 @@
 [build]
-  command = "npm install && npm install pg && npx prisma generate && npm run build"
+  command = "rm -rf node_modules && rm -f package-lock.json && npm install && npx prisma generate && npm run build"
   publish = ".next"
 
 [build.environment]
   NEXT_TELEMETRY_DISABLED = "1"
+  NODE_VERSION = "18"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs" 
