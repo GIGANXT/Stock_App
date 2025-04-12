@@ -31,114 +31,99 @@ export default function MCXAluminium() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
-  // Set up SSE connection
-  const connectSSE = () => {
-    setIsRefreshing(true);
-    // Close existing connection if any
-    if (eventSource) {
-      eventSource.close();
-      setEventSource(null);
-    }
-
+  // Fetch data from the API endpoint
+  const fetchData = async () => {
     try {
-      // Connect to the SSE endpoint
-      const newEventSource = new EventSource('/api/3_months_MCX_aluminium', {
-        withCredentials: false // Important for CORS
-      });
-      setEventSource(newEventSource);
-
-      // Connection opened
-      newEventSource.onopen = () => {
-        console.log('SSE connection opened');
-        setConnectionError(null);
-      };
-
-      newEventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.error) {
-            console.error('Server sent error:', data.error);
-            setConnectionError(data.error);
-            setIsRefreshing(false);
-            return;
-          }
-          setStreamData(data);
-          setLastUpdated(new Date());
-          setConnectionError(null);
-          setIsRefreshing(false);
-        } catch (error) {
-          console.error('Error parsing SSE data:', error);
-          setConnectionError('Error parsing data from server');
-          setIsRefreshing(false);
-        }
-      };
-
-      newEventSource.onerror = (error) => {
-        console.error('SSE connection error:', error);
-        setConnectionError('Connection error - trying to reconnect...');
-        setIsRefreshing(false);
-        
-        // Close the errored connection
-        newEventSource.close();
-        setEventSource(null);
-        
-        // Try to reconnect after 5 seconds
-        setTimeout(connectSSE, 5000);
-      };
-
-    } catch (error) {
-      console.error('Error setting up SSE:', error);
-      setConnectionError('Failed to connect to server');
+      setIsRefreshing(true);
+      const response = await fetch('http://148.135.138.22/mcx-aluminium/stream');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      
+      const data = await response.json();
+      setStreamData(data);
+      setLastUpdated(new Date());
+      setConnectionError(null);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setConnectionError('Failed to load data - will retry...');
+    } finally {
       setIsRefreshing(false);
     }
   };
 
-  // Set up initial connection and handle reconnection
+  // Set up initial fetch and polling
   useEffect(() => {
-    connectSSE();
-
-    // Cleanup on unmount
-    return () => {
-      if (eventSource) {
-        eventSource.close();
-        setEventSource(null);
-      }
-    };
+    // Fetch data immediately
+    fetchData();
+    
+    // Set up polling every 30 seconds
+    const intervalId = setInterval(fetchData, 30000);
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
   }, []); // Empty dependency array since we only want to set up once
 
-  // Handle manual refresh with debounce
+  // Handle manual refresh
   const handleRefresh = () => {
-    if (isRefreshing) return; // Prevent multiple refreshes
-    setIsRefreshing(true);
-    connectSSE();
+    if (!isRefreshing) {
+      fetchData();
+    }
   };
 
   // Show loading state if no data is available
-  if (!streamData) {
+  if (!streamData && !connectionError) {
     return (
       <div className="bg-white rounded-lg p-2 border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] min-h-[160px] flex items-center justify-center">
         <div className="flex flex-col items-center justify-center gap-2">
           <RefreshCw className="w-6 h-6 text-purple-600 animate-spin" />
-          <p className="text-sm text-gray-600">
-            {connectionError || "Loading MCX Aluminium data..."}
-          </p>
-          {connectionError && (
-            <button
-              onClick={handleRefresh}
-              className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 transition-colors"
-            >
-              Retry
-            </button>
-          )}
+          <p className="text-sm text-gray-600">Loading MCX Aluminium data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state with retry button
+  if (connectionError && !streamData) {
+    return (
+      <div className="bg-white rounded-lg p-2 border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] min-h-[160px] flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center gap-2">
+          <p className="text-sm text-gray-600">{connectionError}</p>
+          <button
+            onClick={handleRefresh}
+            className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 transition-colors"
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />
+                Retrying...
+              </>
+            ) : (
+              'Retry Now'
+            )}
+          </button>
         </div>
       </div>
     );
   }
 
   // Get month names from the data
-  const monthNames = Object.keys(streamData.prices);
+  const monthNames = Object.keys(streamData?.prices || {});
+
+  // If we don't have at least two months of data, show loading
+  if (!streamData?.prices || monthNames.length < 2) {
+    return (
+      <div className="bg-white rounded-lg p-2 border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] min-h-[160px] flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center gap-2">
+          <RefreshCw className="w-6 h-6 text-purple-600 animate-spin" />
+          <p className="text-sm text-gray-600">Loading price data...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate spread between the first two months
   const firstMonth = monthNames[0];
