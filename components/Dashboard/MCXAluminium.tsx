@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState } from "react";
 import {
   Calendar,
   TrendingUp,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import MCXClock from "./MCXClock";
-import { useAluminiumStream, PriceData } from "../../pages/api/3_months_MCX_aluminium";
+import { useAluminiumStream } from "../../pages/api/3_months_MCX_aluminium";
 
 export default function MCXAluminium() {
   // State to hold the streaming data
@@ -31,7 +31,7 @@ export default function MCXAluminium() {
     const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
     eventSource.onmessage = (event) => {
       try {
-        const parsed = JSON.parse(event.data);
+        JSON.parse(event.data);
         setLastUpdated(new Date());
         setConnectionError(null);
         setIsPolling(false);
