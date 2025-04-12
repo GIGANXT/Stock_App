@@ -1,6 +1,9 @@
 // hooks/useAluminiumStream.ts
 import { useEffect, useState } from "react";
 import { NextApiRequest, NextApiResponse } from 'next';
+import axios from 'axios';
+import https from 'https';
+import { EventSource } from 'eventsource';
 
 export interface PriceData {
   date: string;
@@ -42,80 +45,110 @@ export const useAluminiumStream = () => {
   return data;
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+interface SSEData {
+  prices: {
+    [key: string]: {
+      price: number;
+      site_rate_change: string;
+    };
+  };
+  date: string;
+  time: string;
+}
 
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    // Handle CORS preflight
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
   }
 
-  if (req.method === 'GET') {
-    try {
-      // Check if client wants SSE or regular HTTP
-      const acceptHeader = req.headers.accept;
-      const wantSSE = acceptHeader?.includes('text/event-stream');
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-      if (wantSSE) {
-        // Handle SSE request
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
+  try {
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
-        const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
+    // Create EventSource connection
+    const eventSource = new EventSource('http://148.135.138.22/mcx-aluminium/stream');
 
-        eventSource.onmessage = (event) => {
-          try {
-            const parsed = JSON.parse(event.data);
-            res.write(`data: ${JSON.stringify(parsed)}\n\n`);
-          } catch (error) {
-            console.error("Error parsing SSE data:", error);
-            res.write(`data: ${JSON.stringify({ error: "Error parsing data" })}\n\n`);
-          }
-        };
+    let hasReceivedData = false;
+    let connectionTimeout: NodeJS.Timeout;
 
-        eventSource.onerror = (err) => {
-          console.error("SSE error:", err);
-          res.write(`data: ${JSON.stringify({ error: "Connection error" })}\n\n`);
+    // Handle connection open
+    eventSource.onopen = () => {
+      console.log('SSE Connection opened');
+      hasReceivedData = false;
+      
+      // Set connection timeout
+      connectionTimeout = setTimeout(() => {
+        if (!hasReceivedData) {
+          console.error('No data received within timeout period');
           eventSource.close();
-        };
-
-        // Clean up when the client disconnects
-        req.on('close', () => {
-          eventSource.close();
-          res.end();
-        });
-      } else {
-        // Handle regular HTTP request
-        const response = await fetch("http://148.135.138.22/mcx-aluminium/stream");
-        if (!response.ok) {
-          throw new Error('Failed to fetch from external service');
-        }
-        const data = await response.text();
-        // The external service sends data in SSE format, so we need to parse it
-        const lines = data.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonData = line.slice(6); // Remove 'data: ' prefix
-            try {
-              const parsed = JSON.parse(jsonData);
-              return res.status(200).json(parsed);
-            } catch (e) {
-              console.error('Error parsing JSON:', e);
-              continue;
-            }
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ error: 'Data stream timeout - retrying' })}\n\n`);
           }
         }
-        throw new Error('No valid data found');
+      }, 20000); // 20 seconds timeout
+    };
+
+    // Handle incoming messages
+    eventSource.onmessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data) as SSEData;
+        if (data && data.prices && Object.keys(data.prices).length > 0) {
+          hasReceivedData = true;
+          clearTimeout(connectionTimeout);
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing message:', error);
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ error: 'Invalid data format' })}\n\n`);
+        }
       }
-    } catch (error) {
-      console.error("Server error:", error);
-      res.status(500).json({ error: "Internal server error" });
+    };
+
+    // Handle errors
+    eventSource.onerror = (event: Event) => {
+      const error = event as ErrorEvent;
+      console.error('SSE Error:', error);
+      clearTimeout(connectionTimeout);
+      eventSource.close();
+      
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ 
+          error: 'Stream connection error - retrying', 
+          details: error.message || 'Connection failed'
+        })}\n\n`);
+      }
+    };
+
+    // Handle client disconnect
+    req.on('close', () => {
+      clearTimeout(connectionTimeout);
+      eventSource.close();
+      if (!res.writableEnded) {
+        res.end();
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Server error:', error);
+    if (!res.writableEnded) {
+      res.status(500).json({
+        error: 'Failed to establish connection',
+        details: error.message
+      });
     }
-  } else {
-    res.status(405).json({ error: 'Method not allowed' });
   }
 }

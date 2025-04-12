@@ -32,21 +32,39 @@ export default function MCXAluminium() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
+  // Set up initial fetch and polling
+  useEffect(() => {
+    // Initial fetch
+    fetchData();
+
+    // Set up polling every 10 seconds
+    const intervalId = setInterval(fetchData, 10000);
+
+    // Cleanup interval on unmount
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
+
   // Fetch data from the API endpoint
   const fetchData = async () => {
     try {
       setIsRefreshing(true);
       const response = await fetch('/api/3_months_MCX_aluminium', {
         headers: {
-          'Accept': 'application/json'  // Explicitly request JSON response
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
         }
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
       const data = await response.json();
+      
+      // Check if we received an error from the server
+      if (!response.ok) {
+        const errorMessage = data.error || 'Failed to fetch data';
+        const details = data.details ? `: ${data.details}` : '';
+        throw new Error(`${errorMessage}${details}`);
+      }
       
       // Validate the data structure
       if (!data || !data.prices || Object.keys(data.prices).length === 0) {
@@ -56,26 +74,19 @@ export default function MCXAluminium() {
       setStreamData(data);
       setLastUpdated(new Date());
       setConnectionError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching data:', err);
-      setConnectionError('Failed to load data - will retry...');
-      setStreamData(null); // Clear any stale data
+      const errorMessage = err.message || 'Failed to load data';
+      setConnectionError(`${errorMessage} - retrying in 10 seconds...`);
+      
+      // Only clear data if we haven't received any yet
+      if (!streamData) {
+        setStreamData(null);
+      }
     } finally {
       setIsRefreshing(false);
     }
   };
-
-  // Set up initial fetch and polling
-  useEffect(() => {
-    // Fetch data immediately
-    fetchData();
-    
-    // Set up polling every 30 seconds
-    const intervalId = setInterval(fetchData, 30000);
-    
-    // Clean up interval on component unmount
-    return () => clearInterval(intervalId);
-  }, []); // Empty dependency array since we only want to set up once
 
   // Handle manual refresh
   const handleRefresh = () => {

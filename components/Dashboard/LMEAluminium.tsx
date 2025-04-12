@@ -48,6 +48,7 @@ export default function LMEAluminium() {
   const [spotPriceData, setSpotPriceData] = useState<SpotPriceData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [spotError, setSpotError] = useState<string | null>(null);
+  const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
   // Default values for spot price if API fails
   const DEFAULT_SPOT_PRICE = 2700.0;
@@ -99,36 +100,72 @@ export default function LMEAluminium() {
     THREE_MONTH_PRICE < SPOT_PRICE ? "backwardation" : "contango";
   const SPREAD = Math.abs(SPOT_PRICE - THREE_MONTH_PRICE).toFixed(2);
 
-  // Function to fetch 3-month data from the API
-  const fetchThreeMonthData = async () => {
-    try {
-      const response = await fetch("/api/3_months_LME_Aluminium");
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const result: AluminumApiResponse = await response.json();
-
-      if (result.success && result.data) {
-        // Map the API data to our component's expected format
-        const mappedData: AluminumPriceData = {
-          ...result.data,
-          Date: result.data["Time span"],
-        };
-        console.log("Fetched 3-month data:", mappedData);
-        setPriceData(mappedData);
-        setError(null);
-        return true;
-      } else {
-        throw new Error(result.data?.error || "Failed to fetch price data");
-      }
-    } catch (err) {
-      console.error("Error fetching 3-month data:", err);
-      setError(err instanceof Error ? err.message : "Failed to refresh data");
-      return false;
+  // Function to set up SSE connection
+  const setupEventSource = () => {
+    if (eventSource) {
+      eventSource.close();
     }
+
+    const newEventSource = new EventSource('/api/3_months_LME_Aluminium');
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 3;
+
+    newEventSource.onmessage = (event) => {
+      try {
+        const result = JSON.parse(event.data);
+        if (result.success && result.data) {
+          // Map the API data to our component's expected format
+          const mappedData: AluminumPriceData = {
+            ...result.data,
+            Date: result.data["Time span"],
+          };
+          setPriceData(mappedData);
+          setError(null);
+          setLastUpdated(new Date());
+          reconnectAttempts = 0; // Reset reconnect attempts on successful data
+        } else if (result.error) {
+          // Only set error if we don't have any previous data
+          if (!priceData) {
+            setError(result.error);
+          }
+          // If we get a maximum retries error, close the connection
+          if (result.error.includes('Maximum retry attempts reached')) {
+            newEventSource.close();
+          }
+        }
+      } catch (err) {
+        console.error("Error parsing SSE data:", err);
+        // Only set error if we don't have any previous data
+        if (!priceData) {
+          setError("Failed to parse price data");
+        }
+      }
+    };
+
+    newEventSource.onerror = (err) => {
+      console.error("SSE error:", err);
+      reconnectAttempts++;
+      
+      // Only show error if we have no data and exceeded max reconnect attempts
+      if (!priceData && reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        setError("Connection lost - using last known values");
+      }
+    };
+
+    setEventSource(newEventSource);
   };
+
+  // Set up SSE connection on component mount
+  useEffect(() => {
+    setupEventSource();
+
+    // Clean up on unmount
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, []);
 
   // Function to fetch spot price data from the API
   const fetchSpotPriceData = async () => {
@@ -150,56 +187,30 @@ export default function LMEAluminium() {
     }
   };
 
-  // Set up polling for data updates
+  // Set up polling for spot price data
   useEffect(() => {
-    // Function to fetch data and update connection status
-    const fetchDataAndUpdate = async () => {
-      try {
-        const threeMonthSuccess = await fetchThreeMonthData();
-        const spotSuccess = await fetchSpotPriceData();
-        
-        if (!threeMonthSuccess) {
-          setError("Failed to fetch 3-month data");
-        }
-        if (!spotSuccess) {
-          setSpotError("Failed to fetch spot price data");
-        }
-        
-        setLastUpdated(new Date());
-      } catch (err) {
-        console.error("Polling error:", err);
-      }
-    };
+    fetchSpotPriceData();
+    const interval = setInterval(fetchSpotPriceData, 30000); // Every 30 seconds
 
-    console.log("Setting up polling for aluminum price data");
-
-    // Initial fetch
-    fetchDataAndUpdate();
-
-    // Set up polling interval
-    const interval = setInterval(fetchDataAndUpdate, 10000); // Every 10 seconds
-
-    // Clean up on unmount
-    return () => {
-      console.log("Cleaning up polling interval");
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, []);
 
   // Function to manually refresh the data
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setError(null); // Clear any existing errors
 
     try {
-      const threeMonthSuccess = await fetchThreeMonthData();
-      const spotSuccess = await fetchSpotPriceData();
+      // Close existing connection
+      if (eventSource) {
+        eventSource.close();
+      }
       
-      if (!threeMonthSuccess) {
-        setError("Failed to fetch 3-month data");
-      }
-      if (!spotSuccess) {
-        setSpotError("Failed to fetch spot price data");
-      }
+      // Set up new connection
+      setupEventSource();
+      
+      // Refresh spot price data
+      await fetchSpotPriceData();
       
       setLastUpdated(new Date());
     } finally {
