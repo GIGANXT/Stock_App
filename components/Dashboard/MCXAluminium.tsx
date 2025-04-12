@@ -36,19 +36,30 @@ export default function MCXAluminium() {
   const fetchData = async () => {
     try {
       setIsRefreshing(true);
-      const response = await fetch('/api/3_months_MCX_aluminium');
+      const response = await fetch('/api/3_months_MCX_aluminium', {
+        headers: {
+          'Accept': 'application/json'  // Explicitly request JSON response
+        }
+      });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch data');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
+      
+      // Validate the data structure
+      if (!data || !data.prices || Object.keys(data.prices).length === 0) {
+        throw new Error('Invalid data structure received from API');
+      }
+      
       setStreamData(data);
       setLastUpdated(new Date());
       setConnectionError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
       setConnectionError('Failed to load data - will retry...');
+      setStreamData(null); // Clear any stale data
     } finally {
       setIsRefreshing(false);
     }
