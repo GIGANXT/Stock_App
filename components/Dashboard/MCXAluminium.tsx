@@ -31,31 +31,72 @@ export default function MCXAluminium() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
-  // Fetch data from the API endpoint
-  const fetchData = async () => {
+  // Set up SSE connection
+  const connectSSE = () => {
+    setIsRefreshing(true);
+    // Close existing connection if any
+    if (eventSource) {
+      eventSource.close();
+    }
+
     try {
-      setIsRefreshing(true);
-      const response = await fetch('/api/3_months_MCX_aluminium');
-      if (!response.ok) {
-        throw new Error('Failed to fetch data');
-      }
-      const data = await response.json();
-      setStreamData(data);
-      setLastUpdated(new Date());
-      setConnectionError(null);
+      // Connect to the SSE endpoint
+      const newEventSource = new EventSource('/api/3_months_MCX_aluminium');
+      setEventSource(newEventSource);
+
+      newEventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setStreamData(data);
+          setLastUpdated(new Date());
+          setConnectionError(null);
+          setIsRefreshing(false);
+        } catch (error) {
+          console.error('Error parsing SSE data:', error);
+          setConnectionError('Error parsing data from server');
+          setIsRefreshing(false);
+        }
+      };
+
+      newEventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        setConnectionError('Connection error - trying to reconnect...');
+        setIsRefreshing(false);
+        
+        // Close the errored connection
+        newEventSource.close();
+        setEventSource(null);
+        
+        // Try to reconnect after 5 seconds
+        setTimeout(connectSSE, 5000);
+      };
+
     } catch (error) {
-      console.error('Error fetching data:', error);
-      setConnectionError('Failed to fetch data from server');
-    } finally {
+      console.error('Error setting up SSE:', error);
+      setConnectionError('Failed to connect to server');
       setIsRefreshing(false);
     }
   };
 
-  // Initial data fetch
+  // Set up initial connection
   useEffect(() => {
-    fetchData();
-  }, []);
+    connectSSE();
+
+    // Cleanup on unmount
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, []); // Empty dependency array since we only want to set up once
+
+  // Handle manual refresh
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    connectSSE();
+  };
 
   // Show loading state if no data is available
   if (!streamData) {
@@ -68,7 +109,7 @@ export default function MCXAluminium() {
           </p>
           {connectionError && (
             <button
-              onClick={fetchData}
+              onClick={handleRefresh}
               className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 transition-colors"
             >
               Retry
@@ -240,7 +281,7 @@ export default function MCXAluminium() {
               <MCXClock />
             </div>
             <button
-              onClick={fetchData}
+              onClick={handleRefresh}
               className="p-1 hover:bg-gray-100/50 rounded-full transition-colors text-gray-600"
               aria-label="Refresh data"
               disabled={isRefreshing}
@@ -404,7 +445,7 @@ export default function MCXAluminium() {
                   </span>
                 </div>
                 <button
-                  onClick={fetchData}
+                  onClick={handleRefresh}
                   className="text-2xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5"
                   disabled={isRefreshing}
                 >
