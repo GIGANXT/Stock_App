@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Calendar,
   TrendingUp,
@@ -8,51 +8,48 @@ import {
   X,
   RefreshCw,
   BarChart2,
+  AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
-import MCXClock from "./MCXClock";
 import { useAluminiumStream } from "../../pages/api/3_months_MCX_aluminium";
 
-export default function MCXAluminium() {
-  // State to hold the streaming data
+const MCXClock = () => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-1 text-xs text-gray-600">
+      <Clock className="w-3 h-3" />
+      <span>{format(currentTime, "HH:mm:ss")}</span>
+    </div>
+  );
+};
+
+const MCXAluminium = () => {
   const [showExpanded, setShowExpanded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
-
+  
   // Use the aluminium stream hook
-  const streamData = useAluminiumStream();
+  const { data, connectionError, isPolling } = useAluminiumStream();
 
   // Handle refresh button click
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // Create a new EventSource connection
-    const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
-    eventSource.onmessage = (event) => {
-      try {
-        JSON.parse(event.data);
-        setLastUpdated(new Date());
-        setConnectionError(null);
-        setIsPolling(false);
-        setIsRefreshing(false);
-        eventSource.close();
-      } catch (error) {
-        console.error("Error parsing SSE data:", error);
-        setConnectionError("Error parsing data from server");
-        setIsRefreshing(false);
-        eventSource.close();
-      }
-    };
-    eventSource.onerror = () => {
-      setConnectionError("Error connecting to server");
-      setIsRefreshing(false);
-      eventSource.close();
-    };
+    // This will trigger the hook to re-fetch data
+    setLastUpdated(new Date());
+    setTimeout(() => setIsRefreshing(false), 1000);
   };
 
   // Show loading if no data is available yet
-  if (!streamData) {
+  if (!data) {
     return (
       <div className="bg-white rounded-lg p-2 border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] min-h-[160px] flex items-center justify-center">
         <div className="flex flex-col items-center justify-center gap-2">
@@ -68,8 +65,9 @@ export default function MCXAluminium() {
             <button
               onClick={handleRefresh}
               className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 transition-colors"
+              disabled={isRefreshing}
             >
-              Load Demo Data
+              {isRefreshing ? "Refreshing..." : "Retry Connection"}
             </button>
           )}
         </div>
@@ -78,28 +76,32 @@ export default function MCXAluminium() {
   }
 
   // Get month names from the data
-  const monthNames = Object.keys(streamData.prices);
+  const monthNames = data.prices ? Object.keys(data.prices) : [];
 
-  // Calculate spread between the first two months
-  const firstMonth = monthNames[0];
-  const secondMonth = monthNames[1];
+  // Calculate spread between the first two months if available
+  let spread = 0;
+  let isContango = false;
+  
+  if (monthNames.length >= 2) {
+    const firstMonth = monthNames[0];
+    const secondMonth = monthNames[1];
 
-  // Handle potential string values in price
-  const firstPrice =
-    typeof streamData.prices[firstMonth].price === "string"
-      ? parseFloat(streamData.prices[firstMonth].price as string)
-      : (streamData.prices[firstMonth].price as number);
+    // Handle potential string values in price
+    const firstPrice = typeof data.prices[firstMonth].price === "string"
+      ? parseFloat(data.prices[firstMonth].price as string)
+      : (data.prices[firstMonth].price as number);
 
-  const secondPrice =
-    typeof streamData.prices[secondMonth].price === "string"
-      ? parseFloat(streamData.prices[secondMonth].price as string)
-      : (streamData.prices[secondMonth].price as number);
+    const secondPrice = typeof data.prices[secondMonth].price === "string"
+      ? parseFloat(data.prices[secondMonth].price as string)
+      : (data.prices[secondMonth].price as number);
 
-  const spread = secondPrice - firstPrice;
-  const isContango = spread > 0;
+    spread = secondPrice - firstPrice;
+    isContango = spread > 0;
+  }
 
   // Helper function to extract change percentage from site_rate_change string
   const extractChangePercentage = (changeStr: string): number => {
+    if (!changeStr) return 0;
     try {
       // Try to extract percentage from formats like "-6.2 (-2.6%)" or "(-2.6%)"
       const percentMatch = changeStr.match(/([-+]?\d+\.?\d*)%/);
@@ -113,7 +115,7 @@ export default function MCXAluminium() {
   // Get price as a number, regardless of whether it's stored as string or number
   const getPrice = (priceValue: string | number): number => {
     if (typeof priceValue === "string") {
-      return parseFloat(priceValue);
+      return parseFloat(priceValue) || 0;
     }
     return priceValue;
   };
@@ -137,9 +139,7 @@ export default function MCXAluminium() {
     showDivider = true,
   }: ContractPriceProps) => {
     const price = getPrice(priceData.price);
-    const changePercentage = extractChangePercentage(
-      priceData.site_rate_change
-    );
+    const changePercentage = extractChangePercentage(priceData.site_rate_change);
 
     // Get month name without year for display
     const displayMonth = month.split(" ")[0];
@@ -190,7 +190,7 @@ export default function MCXAluminium() {
                 ) : (
                   <TrendingDown className="w-3 h-3" />
                 )}
-                <span className="text-xs">{changePercentage.toFixed(2)}%</span>
+                <span className="text-xs">{Math.abs(changePercentage).toFixed(2)}%</span>
               </div>
             </div>
           </div>
@@ -217,6 +217,7 @@ export default function MCXAluminium() {
     gradient,
   }: ContractPriceBoxProps) => {
     const price = getPrice(priceData.price);
+    const changePercentage = extractChangePercentage(priceData.site_rate_change);
 
     // Display month name with year for the expanded view
     const displayMonthWithYear = month;
@@ -267,17 +268,17 @@ export default function MCXAluminium() {
           </div>
           <div
             className={`flex items-center gap-1 ${
-              extractChangePercentage(priceData.site_rate_change) >= 0
-                ? "text-green-600"
-                : "text-red-600"
+              changePercentage >= 0 ? "text-green-600" : "text-red-600"
             }`}
           >
-            {extractChangePercentage(priceData.site_rate_change) >= 0 ? (
+            {changePercentage >= 0 ? (
               <TrendingUp className="w-3 h-3" />
             ) : (
               <TrendingDown className="w-3 h-3" />
             )}
-            <span className="text-xs">{priceData.site_rate_change}</span>
+            <span className="text-xs">
+              {priceData.site_rate_change || "N/A"}
+            </span>
           </div>
         </div>
       </div>
@@ -288,6 +289,15 @@ export default function MCXAluminium() {
     <>
       {/* Compact Card View */}
       <div className="relative bg-white rounded-lg p-2 border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-md transition-all duration-200 min-h-[160px]">
+        {connectionError && (
+          <div className="absolute top-2 right-2">
+            <div className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">
+              <AlertCircle className="w-3 h-3" />
+              <span>Connection Issue</span>
+            </div>
+          </div>
+        )}
+        
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 sm:gap-3">
             <h2 className="text-base sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
@@ -329,7 +339,7 @@ export default function MCXAluminium() {
               <ContractPrice
                 key={month}
                 month={month}
-                priceData={streamData.prices[month]}
+                priceData={data.prices[month]}
                 gradient={
                   index === 0
                     ? "from-blue-600 to-purple-600"
@@ -349,7 +359,7 @@ export default function MCXAluminium() {
                 <ContractPrice
                   key={month}
                   month={month}
-                  priceData={streamData.prices[month]}
+                  priceData={data.prices[month]}
                   gradient={
                     index === 0
                       ? "from-blue-600 to-purple-600"
@@ -363,29 +373,31 @@ export default function MCXAluminium() {
             </div>
           </div>
 
-          {/* Contango section */}
-          <div
-            className={`text-center py-1.5 px-3 rounded-md ${
-              isContango
-                ? "bg-green-100 border border-green-200 text-green-800"
-                : "bg-red-100 border border-red-200 text-red-800"
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2 text-xs font-medium">
-              <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
-              <span>₹{Math.abs(spread).toFixed(2)}</span>
-              {isContango ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingDown className="w-3 h-3" />
-              )}
+          {/* Contango section (only show if we have at least 2 months) */}
+          {monthNames.length >= 2 && (
+            <div
+              className={`text-center py-1.5 px-3 rounded-md ${
+                isContango
+                  ? "bg-green-100 border border-green-200 text-green-800"
+                  : "bg-red-100 border border-red-200 text-red-800"
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2 text-xs font-medium">
+                <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
+                <span>₹{Math.abs(spread).toFixed(2)}</span>
+                {isContango ? (
+                  <TrendingUp className="w-3 h-3" />
+                ) : (
+                  <TrendingDown className="w-3 h-3" />
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Expanded Modal View */}
-      {showExpanded && streamData && (
+      {showExpanded && data && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl p-4 shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-auto border border-gray-200">
             <div className="flex items-center justify-between w-full mb-4">
@@ -407,12 +419,19 @@ export default function MCXAluminium() {
               </button>
             </div>
 
+            {connectionError && (
+              <div className="mb-4 p-2 bg-red-100 text-red-800 rounded-md flex items-center gap-2 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                <span>{connectionError}</span>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row items-stretch gap-4">
               {monthNames.map((month, index) => (
                 <React.Fragment key={month}>
                   <ContractPriceBox
                     month={month}
-                    priceData={streamData.prices[month]}
+                    priceData={data.prices[month]}
                     gradient={
                       index === 0
                         ? "from-blue-600 to-purple-600"
@@ -428,23 +447,25 @@ export default function MCXAluminium() {
               ))}
             </div>
 
-            <div
-              className={`mt-3 text-center py-1.5 px-3 rounded-md ${
-                isContango
-                  ? "bg-green-100 border border-green-200 text-green-800"
-                  : "bg-red-100 border border-red-200 text-red-800"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2 text-xs font-medium">
-                <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
-                <span>₹{Math.abs(spread).toFixed(2)}</span>
-                {isContango ? (
-                  <TrendingUp className="w-3.5 h-3.5" />
-                ) : (
-                  <TrendingDown className="w-3.5 h-3.5" />
-                )}
+            {monthNames.length >= 2 && (
+              <div
+                className={`mt-3 text-center py-1.5 px-3 rounded-md ${
+                  isContango
+                    ? "bg-green-100 border border-green-200 text-green-800"
+                    : "bg-red-100 border border-red-200 text-red-800"
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2 text-xs font-medium">
+                  <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
+                  <span>₹{Math.abs(spread).toFixed(2)}</span>
+                  {isContango ? (
+                    <TrendingUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <TrendingDown className="w-3.5 h-3.5" />
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="mt-4 pt-3 border-t border-gray-200">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -487,7 +508,7 @@ export default function MCXAluminium() {
                 <div className="flex items-center gap-1 text-gray-600">
                   <Clock className="w-3 h-3" />
                   <span className="text-2xs">
-                    Data Time: {streamData.date} {streamData.time}
+                    Data Time: {data.date} {data.time}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 text-gray-600">
@@ -515,4 +536,6 @@ export default function MCXAluminium() {
       )}
     </>
   );
-}
+};
+
+export default MCXAluminium;

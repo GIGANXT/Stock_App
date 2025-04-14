@@ -15,28 +15,106 @@ export interface PriceData {
 
 export const useAluminiumStream = () => {
   const [data, setData] = useState<PriceData | null>(null);
-//
-  useEffect(() => {
-    const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isPolling, setIsPolling] = useState<boolean>(false);
 
-    eventSource.onmessage = (event) => {
+  useEffect(() => {
+    // Function to fetch data directly via API
+    const fetchData = async () => {
       try {
-        const parsed = JSON.parse(event.data);
-        setData(parsed);
+        setIsPolling(true);
+        const response = await fetch("http://148.135.138.22/mcx-aluminium/scrape");
+        
+        if (!response.ok) {
+          throw new Error("Failed to fetch data");
+        }
+        
+        const result = await response.json();
+        setData(result);
+        setConnectionError(null);
+        setIsPolling(false);
       } catch (error) {
-        console.error("Error parsing SSE data:", error);
+        console.error("Error fetching data:", error);
+        setConnectionError("Failed to connect to server. Will try SSE stream.");
+        // Try SSE after API call fails
+        connectSSE();
       }
     };
 
-    eventSource.onerror = (err) => {
-      console.error("SSE error:", err);
-      eventSource.close(); // optional, you can try to reconnect if needed
+    // Function to connect to SSE stream
+    const connectSSE = () => {
+      try {
+        const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const parsed = JSON.parse(event.data);
+            setData(parsed);
+            setConnectionError(null);
+            setIsPolling(false);
+          } catch (error) {
+            console.error("Error parsing SSE data:", error);
+            setConnectionError("Error parsing data from server");
+            setIsPolling(false);
+            eventSource.close();
+            // Fallback to polling
+            startPolling();
+          }
+        };
+
+        eventSource.onerror = (err) => {
+          console.error("SSE error:", err);
+          setConnectionError("SSE connection error");
+          eventSource.close();
+          // Fallback to polling
+          startPolling();
+        };
+
+        return () => {
+          eventSource.close();
+        };
+      } catch (error) {
+        console.error("Error setting up SSE:", error);
+        setConnectionError("Error setting up streaming connection");
+        // Fallback to polling
+        startPolling();
+      }
     };
 
-    return () => {
-      eventSource.close();
+    // Function to start polling at regular intervals when SSE fails
+    const startPolling = () => {
+      setIsPolling(true);
+      const pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch("http://148.135.138.22/mcx-aluminium/scrape");
+          
+          if (!response.ok) {
+            throw new Error("Failed to fetch data");
+          }
+          
+          const result = await response.json();
+          setData(result);
+          setConnectionError(null);
+        } catch (error) {
+          console.error("Error polling data:", error);
+          setConnectionError("Error polling data");
+        }
+      }, 15000); // Poll every 15 seconds
+
+      return () => clearInterval(pollInterval);
     };
+
+    // First try direct API call
+    fetchData().catch(() => {
+      // If direct call fails, try SSE
+      connectSSE();
+    });
+
   }, []);
 
-  return data;
+  return { 
+    data, 
+    connectionError, 
+    isPolling 
+  };
 };
