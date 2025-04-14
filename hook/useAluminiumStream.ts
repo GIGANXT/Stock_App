@@ -1,4 +1,3 @@
-// hooks/useAluminiumStream.ts
 import { useEffect, useState } from "react";
 
 export interface PriceData {
@@ -122,4 +121,4 @@ export const useAluminiumStream = () => {
     connectionError, 
     isPolling 
   };
-};
+}; 
