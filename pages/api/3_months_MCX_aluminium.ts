@@ -18,12 +18,17 @@ export const useAluminiumStream = () => {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState<boolean>(false);
 
+  // Get the API URL from environment variable or fallback to hardcoded value
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://148.135.138.22";
+  const SCRAPE_ENDPOINT = `${API_BASE_URL}/mcx-aluminium/scrape`;
+  const STREAM_ENDPOINT = `${API_BASE_URL}/mcx-aluminium/stream`;
+
   useEffect(() => {
     // Function to fetch data directly via API
     const fetchData = async () => {
       try {
         setIsPolling(true);
-        const response = await fetch("http://148.135.138.22/mcx-aluminium/scrape");
+        const response = await fetch(SCRAPE_ENDPOINT);
         
         if (!response.ok) {
           throw new Error("Failed to fetch data");
@@ -44,7 +49,7 @@ export const useAluminiumStream = () => {
     // Function to connect to SSE stream
     const connectSSE = () => {
       try {
-        const eventSource = new EventSource("http://148.135.138.22/mcx-aluminium/stream");
+        const eventSource = new EventSource(STREAM_ENDPOINT);
         
         eventSource.onmessage = (event) => {
           try {
@@ -86,7 +91,7 @@ export const useAluminiumStream = () => {
       setIsPolling(true);
       const pollInterval = setInterval(async () => {
         try {
-          const response = await fetch("http://148.135.138.22/mcx-aluminium/scrape");
+          const response = await fetch(SCRAPE_ENDPOINT);
           
           if (!response.ok) {
             throw new Error("Failed to fetch data");

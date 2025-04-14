@@ -6,4 +6,20 @@
   NEXT_TELEMETRY_DISABLED = "1"
 
 [[plugins]]
-  package = "@netlify/plugin-nextjs" 
+  package = "@netlify/plugin-nextjs"
+
+# Handle CORS headers for server-sent events
+[[headers]]
+  for = "/*"
+    [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept"
+
+# If your backend is hosted elsewhere and you want to proxy requests through Netlify
+# Uncomment these rules and configure with your actual backend URL
+# [[redirects]]
+#   from = "/mcx-aluminium/*"
+#   to = "http://148.135.138.22/mcx-aluminium/:splat"
+#   status = 200
+#   force = true 
