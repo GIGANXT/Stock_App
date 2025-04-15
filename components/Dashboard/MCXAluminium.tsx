@@ -11,7 +11,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
-import { useAluminiumStream } from "../../hook/useAluminiumStream";
+import { useAluminiumStream } from "../../pages/api/3_months_MCX_aluminium";
 
 const MCXClock = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
