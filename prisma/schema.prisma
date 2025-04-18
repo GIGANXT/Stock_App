@@ -43,3 +43,13 @@ model User {
   email String @unique
 }
 
+
+model PriceAluminium {
+  id           Int     @id @default(autoincrement())
+  currentPrice Float
+  targetPrice  Float
+  phoneNumber  String
+}
+
+
+
