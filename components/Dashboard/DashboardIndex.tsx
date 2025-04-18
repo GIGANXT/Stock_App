@@ -3,6 +3,7 @@ import LMECashSettlement from "./LMECashSettlement";
 import PriceAlert from "./PriceAlert";
 import MCXAluminium from "./MCXAluminium";
 import LMEAluminium from "./LMEAluminium";
+import MonthPrice from "./MonthPrice";
 import RatesDisplay from "./RatesDisplay";
 import LiveSpotCard from "./LiveSpotCard";
 import FeedbackBanner from "./FeedbackBanner";
@@ -77,10 +78,15 @@ export default function MarketDashboard() {
           {/* MCX Aluminium */}
           <MCXAluminium />
 
-          {/* LME and Rates Grid - Updated for responsive layout */}
+          {/* LME, Month Price and Rates Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <LMEAluminium />
-            <RatesDisplay />
+            <div className="space-y-2">
+              <LMEAluminium />
+              <MonthPrice />
+            </div>
+            <div>
+              <RatesDisplay />
+            </div>
           </div>
         </div>
       </div>
