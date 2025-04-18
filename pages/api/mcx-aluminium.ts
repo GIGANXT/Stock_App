@@ -12,7 +12,7 @@ export default async function handler(
   }
 
   try {
-    const latestData = await prisma.MCXAluminium.findFirst({
+    const latestData = await prisma.mCXAluminium.findFirst({
       orderBy: {
         createdAt: 'desc'
       }
