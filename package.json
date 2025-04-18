@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "seed": "node prisma/seed.js"
@@ -15,7 +15,7 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^7.0.2",
     "@mui/material": "^7.0.2",
-    "@prisma/client": "^6.5.0",
+    "@prisma/client": "^5.10.2",
     "@radix-ui/react-label": "^2.1.2",
     "@radix-ui/react-slot": "^1.1.2",
     "@types/eventsource": "^3.0.0",
@@ -31,7 +31,7 @@
     "next": "15.2.3",
     "node-fetch": "^2.7.0",
     "pg": "^8.14.1",
-    "prisma": "^6.5.0",
+    "prisma": "^5.10.2",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.0.0",
