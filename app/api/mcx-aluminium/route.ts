@@ -15,6 +15,32 @@ interface MCXData {
   prices: Record<string, PriceInfo>;
 }
 
+// Helper function to validate MCX data structure
+function isValidMCXData(data: unknown): data is MCXData {
+  if (!data || typeof data !== 'object') return false;
+  
+  const d = data as Record<string, unknown>;
+  
+  if (typeof d.date !== 'string' || 
+      typeof d.timestamp !== 'string' || 
+      !d.prices || 
+      typeof d.prices !== 'object') {
+    return false;
+  }
+  
+  // Validate prices structure
+  for (const [, value] of Object.entries(d.prices)) {
+    if (typeof value !== 'object' || !value) return false;
+    const priceInfo = value as Record<string, unknown>;
+    if (typeof priceInfo.price !== 'number' || 
+        typeof priceInfo.site_rate_change !== 'string') {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
 // Helper function to parse rate change string
 function parseRateChange(rateChangeStr: string): { rateChange: number; rateChangePercent: number } {
   const match = rateChangeStr.match(/^([-+]?\d+\.?\d*)\s*\(([-+]?\d+\.?\d*)%\)$/);
@@ -81,7 +107,7 @@ export async function GET() {
         }
       });
 
-      const data = await new Promise((resolve, reject) => {
+      const data = await new Promise<MCXData>((resolve, reject) => {
         const timeout = setTimeout(() => {
           eventSource.close();
           reject(new Error('Timeout waiting for data'));
@@ -90,7 +116,12 @@ export async function GET() {
         eventSource.onmessage = (event) => {
           clearTimeout(timeout);
           eventSource.close();
-          resolve(JSON.parse(event.data));
+          const parsedData = JSON.parse(event.data);
+          if (isValidMCXData(parsedData)) {
+            resolve(parsedData);
+          } else {
+            reject(new Error('Invalid data structure received'));
+          }
         };
 
         eventSource.onerror = () => {
