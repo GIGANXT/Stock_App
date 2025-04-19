@@ -4,6 +4,17 @@ import { EventSourcePolyfill } from 'event-source-polyfill';
 
 const prisma = new PrismaClient();
 
+interface PriceInfo {
+  price: number;
+  site_rate_change: string;
+}
+
+interface MCXData {
+  date: string;
+  timestamp: string;
+  prices: Record<string, PriceInfo>;
+}
+
 // Helper function to parse rate change string
 function parseRateChange(rateChangeStr: string): { rateChange: number; rateChangePercent: number } {
   const match = rateChangeStr.match(/^([-+]?\d+\.?\d*)\s*\(([-+]?\d+\.?\d*)%\)$/);
@@ -19,7 +30,7 @@ function parseRateChange(rateChangeStr: string): { rateChange: number; rateChang
 }
 
 // Helper function to store data in the database
-async function storeData(data: any) {
+async function storeData(data: MCXData) {
   const date = new Date(data.date);
   const timestamp = new Date(data.timestamp);
   const results = [];
