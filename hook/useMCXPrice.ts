@@ -28,7 +28,11 @@ export function useMCXPrice() {
 
   useEffect(() => {
     let mounted = true;
-    let updateInterval: NodeJS.Timeout;
+    let retryTimeout: NodeJS.Timeout;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 5000; // 5 seconds
+    const UPDATE_INTERVAL = 30000; // 30 seconds
 
     const fetchData = async () => {
       if (!mounted) return;
@@ -63,9 +67,17 @@ export function useMCXPrice() {
         }
         
         setError(null);
+        retryCount = 0; // Reset retry count on successful fetch
       } catch (err) {
         console.error('Error fetching MCX Aluminium data:', err);
         setError('Failed to load data. Please try again later.');
+        
+        // Implement retry logic
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          retryTimeout = setTimeout(fetchData, RETRY_DELAY);
+          return;
+        }
       } finally {
         if (mounted) {
           setLoading(false);
@@ -74,11 +86,12 @@ export function useMCXPrice() {
     };
 
     fetchData();
-    updateInterval = setInterval(fetchData, 60000); // Update every 60 seconds
+    const updateInterval = setInterval(fetchData, UPDATE_INTERVAL);
     
     return () => {
       mounted = false;
       clearInterval(updateInterval);
+      clearTimeout(retryTimeout);
     };
   }, []);
 
