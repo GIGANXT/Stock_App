@@ -14,42 +14,37 @@ model Form {
 }
 
 model Onboarding {
-  id              String   @id @default(uuid())
-  userId          String   @unique
-  companyName     String
-  businessType    String
-  role            String
-  phoneNumber     String
-  pincode         String
-  gstin           String
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  companyName      String
+  businessType     String
+  role             String
+  phoneNumber      String
+  pincode          String
+  gstin            String
   interestedMetals String[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-
-model MCXAluminium {
-  id        String   @id @default(cuid())
-  date      String
-  time      String
-  timestamp String
-  prices    Json     // This will store the prices object
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model User {
-  id Int @id @default(autoincrement())
-  name String
+  id    Int    @id @default(autoincrement())
+  name  String
   email String @unique
 }
 
+model FuturesPrice {
+  id                String   @id @default(uuid())
+  date              DateTime
+  timestamp         DateTime
+  contractMonth     String
+  price             Float
+  rateChange        Float
+  rateChangePercent Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-model PriceAluminium {
-  id           Int     @id @default(autoincrement())
-  currentPrice Float
-  targetPrice  Float
-  phoneNumber  String
+  @@unique([date, contractMonth])
+  @@index([date])
+  @@index([contractMonth])
 }
-
-
-

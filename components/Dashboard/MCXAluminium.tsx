@@ -8,15 +8,13 @@ import {
   X,
   RefreshCw,
   BarChart2,
-  AlertCircle,
 } from "lucide-react";
 import { format } from "date-fns";
-import { useAluminiumStream } from "../../pages/api/3_months_MCX_aluminium";
 
 const MCXClock = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  useEffect(() => {
+  React.useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
@@ -32,51 +30,97 @@ const MCXClock = () => {
   );
 };
 
+interface PriceData {
+  price: number;
+  site_rate_change: string;
+}
+
+interface AluminiumData {
+  date: string;
+  time: string;
+  timestamp: string;
+  prices: {
+    [key: string]: PriceData;
+  };
+}
+
 const MCXAluminium = () => {
   const [showExpanded, setShowExpanded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  
-  // Use the aluminium stream hook
-  const { data, connectionError, isPolling } = useAluminiumStream();
+  const [data, setData] = useState<AluminiumData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      setIsRefreshing(true);
+      const response = await fetch('/api/mcx-aluminium');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      
+      const fetchedData = await response.json();
+      setData(fetchedData);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching MCX Aluminium data:', err);
+      setError('Failed to load data. Please try again later.');
+    } finally {
+      setIsRefreshing(false);
+      setLastUpdated(new Date());
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    
+    // Set up polling every 60 seconds
+    const interval = setInterval(fetchData, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Handle refresh button click
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    // This will trigger the hook to re-fetch data
-    setLastUpdated(new Date());
-    setTimeout(() => setIsRefreshing(false), 1000);
+    fetchData();
   };
 
-  // Show loading if no data is available yet
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg p-4 border border-red-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-red-600">MCX Aluminium</h2>
+          <button
+            onClick={handleRefresh}
+            className="p-1 hover:bg-gray-100/50 rounded-full transition-colors text-gray-600"
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        <p className="text-sm text-red-500 mt-2">{error}</p>
+      </div>
+    );
+  }
+
   if (!data) {
     return (
-      <div className="bg-white rounded-lg p-2 border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] min-h-[160px] flex items-center justify-center">
-        <div className="flex flex-col items-center justify-center gap-2">
-          <RefreshCw className="w-6 h-6 text-purple-600 animate-spin" />
-          <p className="text-sm text-gray-600">
-            {isPolling
-              ? "Loading MCX Aluminium data..."
-              : connectionError
-              ? connectionError
-              : "Connecting to MCX Aluminium stream..."}
-          </p>
-          {connectionError && (
-            <button
-              onClick={handleRefresh}
-              className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 transition-colors"
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? "Refreshing..." : "Retry Connection"}
-            </button>
-          )}
+      <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            MCX Aluminium
+          </h2>
+          <div className="animate-spin">
+            <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
+          </div>
         </div>
       </div>
     );
   }
 
   // Get month names from the data
-  const monthNames = data.prices ? Object.keys(data.prices) : [];
+  const monthNames = Object.keys(data.prices);
 
   // Calculate spread between the first two months if available
   let spread = 0;
@@ -86,14 +130,8 @@ const MCXAluminium = () => {
     const firstMonth = monthNames[0];
     const secondMonth = monthNames[1];
 
-    // Handle potential string values in price
-    const firstPrice = typeof data.prices[firstMonth].price === "string"
-      ? parseFloat(data.prices[firstMonth].price as string)
-      : (data.prices[firstMonth].price as number);
-
-    const secondPrice = typeof data.prices[secondMonth].price === "string"
-      ? parseFloat(data.prices[secondMonth].price as string)
-      : (data.prices[secondMonth].price as number);
+    const firstPrice = data.prices[firstMonth].price;
+    const secondPrice = data.prices[secondMonth].price;
 
     spread = secondPrice - firstPrice;
     isContango = spread > 0;
@@ -285,28 +323,37 @@ const MCXAluminium = () => {
     );
   };
 
+  const getMonthName = (monthKey: string): string => {
+    const months: { [key: string]: string } = {
+      'April 2024': 'April',
+      'May 2024': 'May',
+      'June 2024': 'June'
+    };
+    return months[monthKey] || monthKey;
+  };
+
+  const formatPrice = (price: number): string => {
+    return price.toLocaleString('en-IN', {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2
+    });
+  };
+
+  const formatChange = (change: string): string => {
+    const value = parseFloat(change);
+    return value >= 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`;
+  };
+
   return (
     <>
       {/* Compact Card View */}
       <div className="relative bg-white rounded-lg p-2 border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-md transition-all duration-200 min-h-[160px]">
-        {connectionError && (
-          <div className="absolute top-2 right-2">
-            <div className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">
-              <AlertCircle className="w-3 h-3" />
-              <span>Connection Issue</span>
-            </div>
-          </div>
-        )}
-        
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 sm:gap-3">
             <h2 className="text-base sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
               <BarChart2 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
               MCX Aluminium
             </h2>
-            <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full">
-              Live
-            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="flex items-center text-gray-500 mr-1">
@@ -373,7 +420,7 @@ const MCXAluminium = () => {
             </div>
           </div>
 
-          {/* Contango section (only show if we have at least 2 months) */}
+          {/* Contango section */}
           {monthNames.length >= 2 && (
             <div
               className={`text-center py-1.5 px-3 rounded-md ${
@@ -397,7 +444,7 @@ const MCXAluminium = () => {
       </div>
 
       {/* Expanded Modal View */}
-      {showExpanded && data && (
+      {showExpanded && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl p-4 shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-auto border border-gray-200">
             <div className="flex items-center justify-between w-full mb-4">
@@ -406,9 +453,6 @@ const MCXAluminium = () => {
                   <BarChart2 className="w-5 h-5 text-purple-600" />
                   MCX Aluminium
                 </h2>
-                <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-                  Live
-                </span>
               </div>
               <button
                 onClick={() => setShowExpanded(false)}
@@ -418,13 +462,6 @@ const MCXAluminium = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            {connectionError && (
-              <div className="mb-4 p-2 bg-red-100 text-red-800 rounded-md flex items-center gap-2 text-sm">
-                <AlertCircle className="w-4 h-4" />
-                <span>{connectionError}</span>
-              </div>
-            )}
 
             <div className="flex flex-col sm:flex-row items-stretch gap-4">
               {monthNames.map((month, index) => (
@@ -489,15 +526,28 @@ const MCXAluminium = () => {
                           : "text-pink-800"
                       } mb-1`}
                     >
-                      {month} Contract
+                      {getMonthName(month)}
                     </h3>
-                    <p className="text-2xs text-gray-700">
-                      {index === 0
-                        ? "Near-month contract price reflecting current market conditions."
-                        : index === 1
-                        ? "Next-month contract showing short-term market expectations."
-                        : "Further-out contract indicating longer-term market trends."}
-                    </p>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Price:</span>
+                        <span className="font-semibold">
+                          ₹{formatPrice(getPrice(data.prices[month].price))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Change:</span>
+                        <span
+                          className={`font-medium ${
+                            extractChangePercentage(data.prices[month].site_rate_change) >= 0
+                              ? 'text-green-600'
+                              : 'text-red-600'
+                          }`}
+                        >
+                          {formatChange(data.prices[month].site_rate_change)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -515,7 +565,6 @@ const MCXAluminium = () => {
                   <Clock className="w-3 h-3" />
                   <span className="text-2xs">
                     Last updated: {format(lastUpdated, "MMM d, yyyy HH:mm:ss")}
-                    {isPolling && " (polling)"}
                   </span>
                 </div>
                 <button
@@ -526,8 +575,7 @@ const MCXAluminium = () => {
                   <RefreshCw
                     className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`}
                   />
-                  Refresh{" "}
-                  {connectionError ? "Demo Data" : isPolling ? "Data" : "View"}
+                  Refresh View
                 </button>
               </div>
             </div>
