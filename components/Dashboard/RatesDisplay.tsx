@@ -4,6 +4,34 @@ import { format } from "date-fns";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
+// Add global declaration for window.sharedRates
+declare global {
+  interface Window {
+    sharedRates: {
+      RBI: number | null;
+      SBI: number | null;
+      lastUpdated: string | null;
+    };
+  }
+}
+
+// Update shared rates in the window object
+const updateSharedRates = (rbi: number | null, sbi: number | null) => {
+  if (typeof window !== 'undefined' && window.hasOwnProperty('sharedRates')) {
+    const sharedRates = window.sharedRates as { 
+      RBI: number | null, 
+      SBI: number | null, 
+      lastUpdated: string | null 
+    };
+    
+    if (rbi !== null) sharedRates.RBI = rbi;
+    if (sbi !== null) sharedRates.SBI = sbi;
+    sharedRates.lastUpdated = new Date().toISOString();
+    
+    console.log('Updated shared rates:', sharedRates);
+  }
+};
+
 interface RatesDisplayProps {
   className?: string;
   expanded?: boolean;
@@ -45,8 +73,12 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       }
 
       if (result.data && result.data.length > 0) {
-        setRbiRate(parseFloat(result.data[0].rate)); // Convert string to number
+        const rate = parseFloat(result.data[0].rate);
+        setRbiRate(rate); // Convert string to number
         setLastUpdated(new Date());
+        
+        // Update shared rates
+        updateSharedRates(rate, null);
       }
     } catch (error) {
       console.error("Error fetching RBI rate:", error);
@@ -72,7 +104,11 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       }
       
       if (result.data && result.data.length > 0) {
-        setSbiRate(parseFloat(result.data[0].sbi_tt_sell)); // Convert string to number
+        const rate = parseFloat(result.data[0].sbi_tt_sell);
+        setSbiRate(rate); // Convert string to number
+        
+        // Update shared rates
+        updateSharedRates(null, rate);
         
         // If data is from database, show a message
         if (result.source === "database") {

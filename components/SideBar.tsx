@@ -66,7 +66,7 @@ export default function Sidebar({
     { id: "home", label: "Home", icon: Home, path: "/" },
     { id: "dashboard", label: "Market Dashboard", icon: LayoutDashboard, path: "/dashboard" },
     { id: "trends", label: "Trends", icon: TrendingUp, path: "/coming-soon" },
-    { id: "quote", label: "Get Quote", icon: Quote, path: "/coming-soon" },
+    { id: "quote", label: "Get Quote", icon: Quote, path: "/quote" },
     { id: "aluminum-shorts", label: "Aluminum Shorts", icon: Newspaper, path: "/coming-soon" },
     { id: "alerts", label: "Manage Alerts", icon: Bell, path: "/coming-soon" },
   ];

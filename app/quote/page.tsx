@@ -1,7 +1,7 @@
 "use client";
 
 import PriceCalculator from '../../components/GetQuote/PriceCalculator';
-import AluminumListPrice from '../../components/GetQuote/AluminumListPrice';
+import SupplierCalculator from '../../components/GetQuote/SupplierCalculator';
 import TopCards from '../../components/GetQuote/TopCards';
 
 export default function Quote() {
@@ -20,9 +20,9 @@ export default function Quote() {
             <PriceCalculator/>
           </div>
 
-          {/* Request Quote Form */}
+          {/* Supplier Calculator (Coming Soon) */}
           <div className="col-span-1 lg:col-span-4">
-            <AluminumListPrice />
+            <SupplierCalculator />
           </div>
         </div>
       </div>

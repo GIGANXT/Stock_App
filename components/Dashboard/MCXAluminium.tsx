@@ -13,6 +13,32 @@ import { format } from "date-fns";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
+// Update shared MCX price data in the window object
+const updateSharedMCXPrice = (
+  price: number, 
+  lastUpdated: string, 
+  change: number, 
+  changePercent: number
+) => {
+  if (typeof window !== 'undefined' && window.hasOwnProperty('sharedMCXPrice')) {
+    const sharedMCXPrice = window.sharedMCXPrice as { 
+      currentPrice: number | null; 
+      lastUpdated: string | null; 
+      change: number | null; 
+      changePercent: number | null;
+      source: string | null;
+    };
+    
+    sharedMCXPrice.currentPrice = price;
+    sharedMCXPrice.lastUpdated = lastUpdated;
+    sharedMCXPrice.change = change;
+    sharedMCXPrice.changePercent = changePercent;
+    sharedMCXPrice.source = 'dashboard';
+    
+    console.log('Updated shared MCX price data:', sharedMCXPrice);
+  }
+};
+
 const MCXClock = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -90,6 +116,14 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
         };
         setData(processedData);
         setError(null);
+        
+        // Update shared MCX price data for other components to use
+        updateSharedMCXPrice(
+          processedData.month1Price,
+          processedData.timestamp, 
+          processedData.month1RateVal, 
+          processedData.month1RatePct
+        );
       } else {
         throw new Error('No data available');
       }

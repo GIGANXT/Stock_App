@@ -21,9 +21,9 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
   const [showAddOptions, setShowAddOptions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [priceData, setPriceData] = useState<PriceData>({
-    price: 298.0,
-    change: -15.0,
-    changePercent: -0.55
+    price: 0,
+    change: 0,
+    changePercent: 0
   });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -136,60 +136,75 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center h-[300px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="text-sm text-gray-500 mt-2">Loading price data...</p>
-        </div>
-      ) : error ? (
-        <div className="bg-red-50 rounded-lg p-3 border border-red-100">
-          <p className="text-sm text-red-500">{error}</p>
-          <p className="text-xs text-gray-500">Using default values</p>
-        </div>
-      ) : (
-        <>
-          <div className="bg-purple-50 rounded-lg p-4 mb-4 border border-purple-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-500">Forward Price</span>
-              <div className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded-full">
-                <span>Last Updated: {timestamp ? new Date(timestamp).toLocaleTimeString() : 'N/A'}</span>
-              </div>
+      <div className="bg-purple-50 rounded-lg p-4 mb-4 border border-purple-100">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-gray-500">Forward Price</span>
+          {!isLoading && timestamp && (
+            <div className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded-full">
+              <span>Last Updated: {new Date(timestamp).toLocaleTimeString()}</span>
             </div>
-            
-            <div className="flex items-baseline gap-1 mb-3">
+          )}
+        </div>
+        
+        <div className="flex items-baseline gap-1 mb-3">
+          {isLoading ? (
+            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded"></div>
+          ) : (
+            <>
               <span className="font-mono font-bold text-3xl text-purple-600">
                 ${price.toFixed(2)}
               </span>
               <span className="text-gray-500">/MT</span>
-            </div>
+            </>
+          )}
+        </div>
 
-            <div className={`flex items-center gap-2 ${isIncrease ? "text-green-600" : "text-red-600"} bg-white p-2 rounded-lg border ${isIncrease ? "border-green-100" : "border-red-100"}`}>
-              <div className={`p-1 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
-                {isIncrease ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              </div>
-              <div>
-                <span className="text-sm font-medium">
-                  {isIncrease ? "+" : ""}{change.toFixed(2)} ({changePercent.toFixed(2)}%)
-                </span>
-                <p className="text-xs text-gray-500">From previous close</p>
-              </div>
-            </div>
-            
-            {isCached && (
-              <div className="mt-2 flex items-center gap-1 text-yellow-600 bg-yellow-50 p-1.5 rounded text-xs border border-yellow-100">
-                <Info className="w-3.5 h-3.5" />
-                <span>Showing cached data</span>
-              </div>
-            )}
+        {isLoading ? (
+          <div className="h-10 bg-gray-200 animate-pulse rounded-lg"></div>
+        ) : error ? (
+          <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-xs text-gray-500">Using default values</p>
           </div>
-
-          <div className="border-t border-gray-200 pt-3">
-            <div className="flex items-center gap-1.5 text-purple-700 mb-2">
-              <LineChart className="w-3.5 h-3.5" />
-              <h3 className="text-sm font-medium">Market Insight</h3>
+        ) : (
+          <div className={`flex items-center gap-2 ${isIncrease ? "text-green-600" : "text-red-600"} bg-white p-2 rounded-lg border ${isIncrease ? "border-green-100" : "border-red-100"}`}>
+            <div className={`p-1 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
+              {isIncrease ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
             </div>
-            
-            <div className="space-y-3">
+            <div>
+              <span className="text-sm font-medium">
+                {isIncrease ? "+" : ""}{change.toFixed(2)} ({changePercent.toFixed(2)}%)
+              </span>
+              <p className="text-xs text-gray-500">From previous close</p>
+            </div>
+          </div>
+        )}
+        
+        {!isLoading && isCached && (
+          <div className="mt-2 flex items-center gap-1 text-yellow-600 bg-yellow-50 p-1.5 rounded text-xs border border-yellow-100">
+            <Info className="w-3.5 h-3.5" />
+            <span>Showing cached data</span>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-gray-200 pt-3">
+        <div className="flex items-center gap-1.5 text-purple-700 mb-2">
+          <LineChart className="w-3.5 h-3.5" />
+          <h3 className="text-sm font-medium">Market Insight</h3>
+        </div>
+        
+        <div className="space-y-3">
+          {isLoading ? (
+            <>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-full"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-11/12"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-10/12"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-full"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-9/12"></div>
+            </>
+          ) : (
+            <>
               <p className="text-xs text-gray-600">
                 The 3-month futures price indicates market expectations for future aluminium delivery. The current {isIncrease ? "increase" : "decrease"} suggests {isIncrease ? "positive" : "negative"} market sentiment.
               </p>
@@ -205,10 +220,10 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
                 </div>
                 <span>LME London</span>
               </div>
-            </div>
-          </div>
-        </>
-      )}
+            </>
+          )}
+        </div>
+      </div>
     </>
   );
   
@@ -252,25 +267,35 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
         </div>
 
         {error && <p className="text-xs text-red-500 mb-2 relative z-10">{error}</p>}
-        {isCached && <p className="text-xs text-yellow-500 mb-2 relative z-10">Showing cached data</p>}
+        {!isLoading && isCached && <p className="text-xs text-yellow-500 mb-2 relative z-10">Showing cached data</p>}
 
         <div className="flex items-baseline gap-1 relative z-10">
-          <span className="font-mono font-bold text-2xl text-purple-600">
-            ${price.toFixed(2)}
-          </span>
-          <span className="text-sm text-gray-500">/MT</span>
+          {isLoading ? (
+            <div className="h-7 w-20 bg-gray-200 animate-pulse rounded"></div>
+          ) : (
+            <>
+              <span className="font-mono font-bold text-2xl text-purple-600">
+                ${price.toFixed(2)}
+              </span>
+              <span className="text-sm text-gray-500">/MT</span>
+            </>
+          )}
         </div>
 
-        <div className={`flex items-center gap-1.5 mt-1.5 ${isIncrease ? "text-green-600" : "text-red-600"} relative z-10`}>
-          <div className={`p-0.5 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
-            {isIncrease ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+        {isLoading ? (
+          <div className="h-6 w-24 bg-gray-200 animate-pulse rounded mt-1.5"></div>
+        ) : (
+          <div className={`flex items-center gap-1.5 mt-1.5 ${isIncrease ? "text-green-600" : "text-red-600"} relative z-10`}>
+            <div className={`p-0.5 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
+              {isIncrease ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+            </div>
+            <span className="text-sm font-medium">
+              {isIncrease ? "+" : ""}{change.toFixed(2)} ({changePercent.toFixed(2)}%)
+            </span>
           </div>
-          <span className="text-sm font-medium">
-            {isIncrease ? "+" : ""}{change.toFixed(2)} ({changePercent.toFixed(2)}%)
-          </span>
-        </div>
+        )}
 
-        {timestamp && (
+        {!isLoading && timestamp && (
           <div className="text-xs text-gray-500 mt-2 relative z-10">
             Last updated: {new Date(timestamp).toLocaleString()}
           </div>
