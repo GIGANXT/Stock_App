@@ -1,0 +1,494 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  Maximize2,
+  RefreshCw,
+  BarChart2,
+  LineChart,
+} from "lucide-react";
+import { format } from "date-fns";
+import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
+import ExpandedModalWrapper from "./ExpandedModalWrapper";
+
+const MCXClock = () => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-1 text-xs text-gray-600">
+      <Clock className="w-3 h-3" />
+      <span>{format(currentTime, "HH:mm:ss")}</span>
+    </div>
+  );
+};
+
+interface AluminiumData {
+  id: string;
+  timestamp: string;
+  month1Label: string;
+  month1Price: number;
+  month1RateVal: number;
+  month1RatePct: number;
+  month2Label: string;
+  month2Price: number;
+  month2RateVal: number;
+  month2RatePct: number;
+  month3Label: string;
+  month3Price: number;
+  month3RateVal: number;
+  month3RatePct: number;
+  createdAt: string;
+}
+
+interface MCXAluminiumProps {
+  expanded?: boolean;
+}
+
+const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [data, setData] = useState<AluminiumData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const { addExpandedComponent } = useExpandedComponents();
+
+  const fetchData = async () => {
+    try {
+      setIsRefreshing(true);
+      const res = await fetch('/api/3_month_mcx?action=view&limit=1');
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to fetch data');
+      }
+      
+      const result = await res.json();
+      
+      if (result.success && result.data?.length > 0) {
+        const rawData = result.data[0];
+        const processedData: AluminiumData = {
+          ...rawData,
+          month1Price: parseFloat(rawData.month1Price),
+          month2Price: parseFloat(rawData.month2Price),
+          month3Price: parseFloat(rawData.month3Price),
+          month1RateVal: parseFloat(rawData.month1RateVal),
+          month2RateVal: parseFloat(rawData.month2RateVal),
+          month3RateVal: parseFloat(rawData.month3RateVal),
+          month1RatePct: parseFloat(rawData.month1RatePct),
+          month2RatePct: parseFloat(rawData.month2RatePct),
+          month3RatePct: parseFloat(rawData.month3RatePct),
+        };
+        setData(processedData);
+        setError(null);
+      } else {
+        throw new Error('No data available');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setIsRefreshing(false);
+      setLastUpdated(new Date());
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Add click-away listener to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowAddOptions(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Calculate spread between the first two months
+  let spread = 0;
+  let isContango = false;
+  
+  if (data) {
+    spread = data.month2Price - data.month1Price;
+    isContango = spread > 0;
+  }
+
+  // Helper function to format price change
+  const formatChange = (rateVal: number, ratePct: number): string => {
+    return `${rateVal.toFixed(2)} (${ratePct.toFixed(2)}%)`;
+  };
+
+  // Handle add component selection
+  const handleAddComponent = (componentType: 'LMEAluminium' | 'MonthPrice' | 'RatesDisplay') => {
+    addExpandedComponent(componentType);
+    setShowAddOptions(false);
+  };
+
+  interface ContractPriceProps {
+    label: string;
+    price: number;
+    rateVal: number;
+    ratePct: number;
+    gradient: string;
+    showDivider?: boolean;
+  }
+
+  const ContractPrice = ({
+    label,
+    price,
+    rateVal,
+    ratePct,
+    gradient,
+    showDivider = true,
+  }: ContractPriceProps) => {
+    const displayMonth = label.split(" ")[0];
+    const isPositive = ratePct >= 0;
+
+    return (
+      <div className="flex-1 flex items-center">
+        <div className="w-full">
+          <div className="flex flex-col items-center">
+            <div className="text-xs text-gray-600 flex items-center gap-1 mb-0.5 h-4">
+              <Calendar
+                className={`w-3 h-3 ${
+                  label === data?.month1Label
+                    ? "text-blue-600"
+                    : label === data?.month2Label
+                    ? "text-purple-600"
+                    : "text-pink-600"
+                }`}
+              />
+              <span>{displayMonth}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className={`font-mono font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent text-xl`}>
+                ₹{price.toFixed(2)}
+              </div>
+              <div className={`flex items-center gap-1 h-4 ${isPositive ? "text-green-600" : "text-red-600"}`}>
+                {isPositive ? 
+                  <TrendingUp className="w-3 h-3" /> : 
+                  <TrendingDown className="w-3 h-3" />
+                }
+                <span className="text-xs">
+                  {rateVal.toFixed(2)} ({ratePct.toFixed(2)}%)
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        {showDivider && (
+          <div className="h-10 w-px bg-gradient-to-b from-transparent via-gray-200 to-transparent mx-1" />
+        )}
+      </div>
+    );
+  };
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg p-3 border border-red-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-red-600">MCX Aluminium</h2>
+          <button
+            onClick={fetchData}
+            className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        <p className="text-xs text-red-500 mt-1">{error}</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-gray-700">MCX Aluminium</h2>
+          <div className="animate-spin">
+            <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Expanded modal content
+  const renderExpandedContent = () => (
+    <>
+      <div className="flex items-end justify-between w-full mb-4">
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setShowAddOptions(prev => !prev)}
+            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            Add
+          </button>
+          {showAddOptions && (
+            <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20 py-1 border border-gray-200 overflow-hidden">
+              <div className="px-4 py-2 text-xs font-medium text-gray-500 border-b border-gray-100 bg-gray-50">
+                Add to Dashboard
+              </div>
+              <div className="py-1">
+                <button 
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2"
+                  onClick={() => handleAddComponent('LMEAluminium')}
+                >
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  LME Spot Price
+                </button>
+                <button 
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2"
+                  onClick={() => handleAddComponent('MonthPrice')}
+                >
+                  <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                  3-Month LME
+                </button>
+                <button 
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors flex items-center gap-2"
+                  onClick={() => handleAddComponent('RatesDisplay')}
+                >
+                  <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                  Exchange Rates
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <MCXClock />
+          <button
+            onClick={fetchData}
+            className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-gray-600 ${isRefreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        {[
+          {
+            label: data.month1Label,
+            price: data.month1Price,
+            rateVal: data.month1RateVal,
+            ratePct: data.month1RatePct,
+            colorClass: "bg-blue-50 border-blue-100",
+            textClass: "text-blue-800"
+          },
+          {
+            label: data.month2Label,
+            price: data.month2Price,
+            rateVal: data.month2RateVal,
+            ratePct: data.month2RatePct,
+            colorClass: "bg-purple-50 border-purple-100",
+            textClass: "text-purple-800"
+          },
+          {
+            label: data.month3Label,
+            price: data.month3Price,
+            rateVal: data.month3RateVal,
+            ratePct: data.month3RatePct,
+            colorClass: "bg-pink-50 border-pink-100",
+            textClass: "text-pink-800"
+          }
+        ].map((item, index) => (
+          <div key={index} className={`${item.colorClass} rounded-lg p-3 border`}>
+            <div className="flex items-center gap-1 mb-1.5">
+              <Calendar className="w-3 h-3" />
+              <h3 className={`text-xs font-medium ${item.textClass}`}>{item.label}</h3>
+            </div>
+            <div className="font-mono font-bold text-xl">₹{item.price.toFixed(2)}</div>
+            <div className={`flex items-center gap-1 mt-1 ${item.ratePct >= 0 ? "text-green-600" : "text-red-600"}`}>
+              {item.ratePct >= 0 ? 
+                <TrendingUp className="w-3 h-3" /> : 
+                <TrendingDown className="w-3 h-3" />
+              }
+              <span className="text-xs">{formatChange(item.rateVal, item.ratePct)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className={`mb-4 text-center py-2 px-3 rounded-lg border ${
+        isContango
+          ? "bg-green-50 border-green-200 text-green-800"
+          : "bg-red-50 border-red-200 text-red-800"
+      }`}>
+        <div className="flex items-center justify-center gap-2">
+          <div className={`p-1 rounded-full ${isContango ? "bg-green-100" : "bg-red-100"}`}>
+            {isContango ? 
+              <TrendingUp className="w-3.5 h-3.5" /> : 
+              <TrendingDown className="w-3.5 h-3.5" />
+            }
+          </div>
+          <div>
+            <span className="text-sm font-medium">{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
+            <p className="text-xs mt-0.5">Price difference: ₹{Math.abs(spread).toFixed(2)}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 pt-3">
+        <div className="flex items-center gap-1.5 text-blue-700 mb-2">
+          <LineChart className="w-3.5 h-3.5" />
+          <h3 className="text-sm font-medium">Market Insight</h3>
+        </div>
+        
+        <div className="space-y-3">
+          <p className="text-xs text-gray-600">
+            The futures market is currently in <span className={isContango ? "text-green-700" : "text-red-700"}>{isContango ? "contango" : "backwardation"}</span>, 
+            with {isContango ? "later contracts trading at higher prices" : "near-term contracts trading at higher prices"}.
+          </p>
+          
+          <p className="text-xs text-gray-600">
+            {isContango 
+              ? "In a contango market, investors are willing to pay a premium for future delivery, indicating expectations of higher prices down the line."
+              : "In a backwardation market, spot prices exceed futures prices, often indicating strong current demand or supply concerns."
+            }
+          </p>
+          
+          <div className="text-xs text-gray-500 mt-2 flex items-center justify-between">
+            <span>Last updated: {format(lastUpdated, "HH:mm:ss")}</span>
+            <span>MCX India</span>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  // If expanded prop is true, render just the expanded content
+  if (expanded) {
+    return (
+      <ExpandedModalWrapper
+        title="MCX Aluminium"
+        subtitle="Near Month Futures"
+        componentType="MCXAluminium"
+      >
+        {renderExpandedContent()}
+      </ExpandedModalWrapper>
+    );
+  }
+
+  return (
+    <>
+      {/* Compact Card View */}
+      <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm min-h-[160px]">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-bold text-blue-600 flex items-center gap-1">
+            <BarChart2 className="w-3.5 h-3.5 text-purple-600" />
+            MCX Aluminium
+          </h2>
+          <div className="flex items-center gap-1.5">
+            <MCXClock />
+            <button
+              onClick={fetchData}
+              className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              onClick={() => addExpandedComponent('MCXAluminium')}
+              className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          {/* Mobile: Vertical layout */}
+          <div className="sm:hidden flex flex-col space-y-1.5 mb-1">
+            <ContractPrice
+              label={data.month1Label}
+              price={data.month1Price}
+              rateVal={data.month1RateVal}
+              ratePct={data.month1RatePct}
+              gradient="from-blue-600 to-purple-600"
+              showDivider={false}
+            />
+            <ContractPrice
+              label={data.month2Label}
+              price={data.month2Price}
+              rateVal={data.month2RateVal}
+              ratePct={data.month2RatePct}
+              gradient="from-purple-600 to-pink-600"
+              showDivider={false}
+            />
+            <ContractPrice
+              label={data.month3Label}
+              price={data.month3Price}
+              rateVal={data.month3RateVal}
+              ratePct={data.month3RatePct}
+              gradient="from-pink-600 to-rose-600"
+              showDivider={false}
+            />
+          </div>
+
+          {/* Desktop: Horizontal layout */}
+          <div className="hidden sm:flex items-center my-1">
+            <ContractPrice
+              label={data.month1Label}
+              price={data.month1Price}
+              rateVal={data.month1RateVal}
+              ratePct={data.month1RatePct}
+              gradient="from-blue-600 to-purple-600"
+            />
+            <ContractPrice
+              label={data.month2Label}
+              price={data.month2Price}
+              rateVal={data.month2RateVal}
+              ratePct={data.month2RatePct}
+              gradient="from-purple-600 to-pink-600"
+            />
+            <ContractPrice
+              label={data.month3Label}
+              price={data.month3Price}
+              rateVal={data.month3RateVal}
+              ratePct={data.month3RatePct}
+              gradient="from-pink-600 to-rose-600"
+              showDivider={false}
+            />
+          </div>
+
+          {/* Contango section */}
+          <div className={`text-center py-1 px-2 rounded ${
+            isContango
+              ? "bg-green-100 border border-green-200 text-green-800"
+              : "bg-red-100 border border-red-200 text-red-800"
+          }`}>
+            <div className="flex items-center justify-center gap-1.5 text-xs">
+              <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
+              <span>₹{Math.abs(spread).toFixed(2)}</span>
+              {isContango ? 
+                <TrendingUp className="w-3 h-3" /> : 
+                <TrendingDown className="w-3 h-3" />
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default MCXAluminium;
