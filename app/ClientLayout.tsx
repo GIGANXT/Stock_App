@@ -11,9 +11,30 @@ interface ClientLayoutProps {
 export default function ClientLayout({ children }: ClientLayoutProps) {
   const pathname = usePathname();
   const isAuthPage = pathname?.startsWith("/auth");
+  const isPrivacyPage = pathname === "/privacy-policy";
+  const isTermsPage = pathname === "/terms-of-service";
 
   if (isAuthPage) {
     return children;
+  }
+
+  if (isPrivacyPage || isTermsPage) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900">
+        <nav className="bg-black/50 backdrop-blur-sm border-b border-white/10 py-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+
+            <a
+              href="/"
+              className="text-white hover:text-blue-400 transition-colors duration-200 flex items-center space-x-1"
+            >
+              <span>← Back to Home</span>
+            </a>
+          </div>
+        </nav>
+        {children}
+      </div>
+    );
   }
 
   return (
@@ -21,4 +42,4 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
       <Layout>{children}</Layout>
     </ExpandedComponentsProvider>
   );
-} 
+}
