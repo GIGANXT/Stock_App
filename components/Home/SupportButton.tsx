@@ -7,15 +7,15 @@ export default function SupportButton() {
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 group"
-        aria-label="Open support chat"
-      >
-        <MessageCircle className="w-6 h-6" />
-        <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-white text-gray-900 px-4 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-          Need help?
-        </span>
-      </button>
+  onClick={() => setIsOpen(true)}
+  className="fixed bottom-6 right-6 z-50 p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 group"
+  aria-label="Open support chat"
+>
+  <MessageCircle className="w-6 h-6" />
+  <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-3 bg-white text-gray-900 px-4 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+    Need help?
+  </span>
+</button>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
