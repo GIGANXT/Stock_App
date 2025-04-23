@@ -21,7 +21,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
     return children;
   }
 
-  if (isPrivacyPage || isTermsPage) {
+  if (isPrivacyPage || isTermsPage || isCookiesPage) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black to-gray-900">
         <nav className="bg-black/50 backdrop-blur-sm border-b border-white/10 py-4">
