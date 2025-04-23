@@ -14,6 +14,8 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   const isAuthPage = pathname?.startsWith("/auth");
   const isPrivacyPage = pathname === "/privacy-policy";
   const isTermsPage = pathname === "/terms-of-service";
+  const isCookiesPage = pathname === "/cookie-policy";
+
 
   if (isAuthPage) {
     return children;
