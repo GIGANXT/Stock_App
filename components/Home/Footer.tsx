@@ -46,17 +46,17 @@ export default function Footer() {
             <h4 className="text-lg font-semibold text-white mb-4">Product</h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/features" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors duration-200">
                   Features
                 </Link>
               </li>
               <li>
-                <Link href="/pricing" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors duration-200">
                   Pricing
                 </Link>
               </li>
               <li>
-                <Link href="/docs" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors duration-200">
                   Documentation
                 </Link>
               </li>
@@ -67,17 +67,17 @@ export default function Footer() {
             <h4 className="text-lg font-semibold text-white mb-4">Company</h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/about" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors duration-200">
                   About
                 </Link>
               </li>
               <li>
-                <Link href="/blog" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors duration-200">
                   Blog
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors duration-200">
                   Contact
                 </Link>
               </li>
@@ -90,12 +90,15 @@ export default function Footer() {
             <p className="text-gray-400 text-sm">
               © {new Date().getFullYear()} NOVEX PRO. All rights reserved.
             </p>
-            <div className="flex space-x-6 mt-4 md:mt-0">
-              <Link href="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors duration-200">
+            <div className="flex space-x-2 mt-4 md:mt-0">
+              <Link href="/privacy-policy" className="text-gray-400 hover:text-white text-sm transition-colors duration-200">
                 Privacy Policy
               </Link>
-              <Link href="/terms" className="text-gray-400 hover:text-white text-sm transition-colors duration-200">
+              <Link href="/terms-of-service" className="text-gray-400 hover:text-white text-sm transition-colors duration-200">
                 Terms of Service
+              </Link>
+              <Link href="/cookie-policy" className="text-gray-400 hover:text-white text-sm transition-colors duration-200">
+                Cookie Policy
               </Link>
             </div>
           </div>
