@@ -1,12 +1,20 @@
 'use client';
 
 import React from 'react';
-import { ScrollText } from 'lucide-react';
+import { ScrollText, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+
 
 export default function TermsOfService() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-gray-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-8">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Home
+      </Link>
         <div className="flex items-center justify-center mb-12">
           <ScrollText className="w-12 h-12 text-blue-500 mr-4" />
           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
