@@ -277,8 +277,8 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       <div className={`relative bg-white rounded-xl p-4 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] min-h-[300px] ${className}`}>
         <div className="flex items-center justify-between mb-4 relative z-10">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-              <Banknote className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+            <h2 className="text-base font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-purple-600" />
               Exchange Rates
             </h2>
           </div>
@@ -394,8 +394,8 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
 
         <div className="flex items-center justify-between mb-4 relative z-10">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-              <Banknote className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+            <h2 className="text-base font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-purple-600" />
               Exchange Rates
             </h2>
           </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from "react";
-import { TrendingUp, TrendingDown, Maximize2, Wifi, LineChart, RefreshCw } from "lucide-react";
+import { TrendingUp, TrendingDown, Maximize2, Wifi, LineChart, RefreshCw, BarChart2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
@@ -215,7 +215,7 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
     return (
       <ExpandedModalWrapper
         title="LME Aluminium"
-        subtitle="Live Spot Price"
+        subtitle="Spot Price"
         componentType="LMEAluminium"
       >
         {renderExpandedContent()}
@@ -233,7 +233,7 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
         <div className="flex items-center justify-between mb-2 relative z-10">
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Wifi className="w-4.5 h-4.5 text-green-600" />
+              <BarChart2 className="w-4 h-4 text-blue-600" />
               <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full">
                 <div className="absolute inset-0 bg-green-500 rounded-full animate-ping" />
               </div>

@@ -5,7 +5,7 @@ import { Clock, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import dynamic from 'next/dynamic';
 
-interface LiveSpotCardProps {
+interface DelayedSpotCardProps {
     lastUpdated?: Date;
     spotPrice?: number;
     change?: number;
@@ -27,14 +27,14 @@ const ClockComponent = dynamic(() => import('./Clock'), {
     loading: () => <span className="text-sm text-gray-600">--:--:--</span>
 });
 
-export default function LiveSpotCard({
+export default function DelayedSpotCard({
     lastUpdated,
     spotPrice = 2700.00,
     change = 13.00,
     changePercent = 0.48,
     unit = '/MT',
     apiUrl = '/api/metal-price'
-}: LiveSpotCardProps) {
+}: DelayedSpotCardProps) {
     const [priceData, setPriceData] = useState<PriceData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

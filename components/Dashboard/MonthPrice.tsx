@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { TrendingUp, TrendingDown, RefreshCw, Maximize2, LineChart, Info } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, Maximize2, LineChart, Info, BarChart2 } from "lucide-react";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
@@ -248,7 +248,10 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
         <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none bg-gradient-to-br from-purple-50/30 via-indigo-50/30 to-violet-50/30 hidden sm:block"></div>
         
         <div className="flex items-center justify-between mb-2 relative z-10">
-          <h2 className="text-base font-bold text-purple-600">3-Month LME</h2>
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-purple-600" />
+            <h2 className="text-base font-bold text-purple-600">3-Month LME</h2>
+          </div>
           <div className="flex items-center gap-1">
             <button
               onClick={fetchData}

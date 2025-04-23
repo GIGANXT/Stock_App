@@ -211,7 +211,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
                     : "text-pink-600"
                 }`}
               />
-              <span>{displayMonth}</span>
+              <span className="font-bold text-sm leading-none tracking-tight">{displayMonth}</span>
             </div>
             <div className="flex flex-col items-center">
               <div className={`font-mono font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent text-3xl mb-1`}>
@@ -230,7 +230,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           </div>
         </div>
         {showDivider && (
-          <div className="h-12 w-px bg-gradient-to-b from-transparent via-gray-200 to-transparent mx-1" />
+          <div className="h-12 w-0.5 bg-gradient-to-b from-transparent via-gray-400 to-transparent mx-1 font-bold" />
         )}
       </div>
     );
