@@ -199,12 +199,18 @@ export default async function handler(
     const data: PriceData = await response.json();
     const lastUpdatedDate = new Date(data.last_updated);
     
+    // Adjust spotPrice calculation: spotPrice = spotPrice - (-change)
+    // Only apply this calculation if change is negative
+    const adjustedSpotPrice = data.price_change < 0 ? 
+      data.spot_price - (-data.price_change) : 
+      data.spot_price;
+    
     // Check if we already have a record with this timestamp AND price
     const existingRecord = await prisma.metalPrice.findFirst({
       where: {
         metal: 'aluminum',
         lastUpdated: lastUpdatedDate,
-        spotPrice: data.spot_price
+        spotPrice: adjustedSpotPrice
       }
     });
     
@@ -215,16 +221,16 @@ export default async function handler(
       await prisma.metalPrice.create({
         data: {
           metal: 'aluminum',
-          spotPrice: data.spot_price,
+          spotPrice: adjustedSpotPrice,
           change: data.price_change,
           changePercent: data.change_percentage,
           lastUpdated: lastUpdatedDate
         }
       });
-      console.log(`New price record created: ${data.spot_price} at ${data.last_updated}`);
+      console.log(`New price record created: ${adjustedSpotPrice} at ${data.last_updated}`);
       isNewRecord = true;
     } else {
-      console.log(`Skipped duplicate record: ${data.spot_price} at ${data.last_updated}`);
+      console.log(`Skipped duplicate record: ${adjustedSpotPrice} at ${data.last_updated}`);
     }
     
     // If we created a new record, run cleanup process periodically
@@ -239,7 +245,7 @@ export default async function handler(
     
     // Transform the data to match the frontend's expected format
     const transformedData = {
-      spotPrice: data.spot_price,
+      spotPrice: adjustedSpotPrice,
       change: data.price_change,
       changePercent: data.change_percentage,
       lastUpdated: data.last_updated
