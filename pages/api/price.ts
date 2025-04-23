@@ -46,7 +46,7 @@ function parseRateChange(rateChangeStr: string): { rateChange: number; rateChang
 // Function for direct API call (fallback)
 async function fetchFromDataEndpoint(): Promise<PriceData> {
   console.log('Trying direct API call to /data endpoint');
-  const response = await fetch('http://148.135.138.22:5003/data', {
+  const response = await fetch('http://148.135.138.22:5003/stream', {
     headers: {
       'Accept': 'application/json',
     },
