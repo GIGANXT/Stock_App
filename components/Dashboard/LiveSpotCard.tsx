@@ -87,7 +87,7 @@ export default function LiveSpotCard({
     return (
         <div className="price-card bg-white rounded-xl p-4 border border-gray-200 
           shadow-md hover:shadow-lg transition-all duration-200 w-full max-w-xs
-          relative overflow-hidden gpu-render group">
+          relative overflow-hidden gpu-render group min-h-[162px]">
             
             {/* Background effect - properly layered */}
             <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
@@ -125,14 +125,23 @@ export default function LiveSpotCard({
                     </div>
 
                     {loading ? (
-                        <div className="text-center py-4">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                            <p className="text-sm text-gray-500 mt-2">Loading price data...</p>
+                        <div className="py-2">
+                            <div className="h-6 w-32 bg-gray-200 animate-pulse mb-2 rounded"></div>
+                            <div className="h-6 w-36 bg-gray-200 animate-pulse rounded"></div>
                         </div>
                     ) : error ? (
-                        <div className="text-center py-4">
-                            <p className="text-sm text-red-500">{error}</p>
-                            <p className="text-xs text-gray-500 mt-1">Using default values</p>
+                        <div>
+                            <div className="h-8 w-32 mb-2">
+                                <p className="text-sm text-red-500">{error}</p>
+                                <p className="text-xs text-gray-500">Using default values</p>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="font-mono text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 
+                                  bg-clip-text text-transparent gradient-text crisp-text">
+                                    ${currentSpotPrice.toFixed(2)}
+                                </span>
+                                <span className="text-sm text-gray-600 crisp-text">{unit}</span>
+                            </div>
                         </div>
                     ) : (
                         <>

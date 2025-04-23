@@ -60,7 +60,7 @@ export default function LiveSpotPriceCard({
       shadow-md hover:shadow-lg transition-all duration-200 w-full 
       max-w-xs sm:max-w-sm
       relative overflow-hidden
-      will-change-transform group" // Optimizes for performance
+      will-change-transform group min-h-[162px]" // Optimizes for performance
     >
       {/* Background effect - separated from text layer */}
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 

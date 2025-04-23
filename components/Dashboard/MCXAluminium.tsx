@@ -85,6 +85,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [data, setData] = useState<AluminiumData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { addExpandedComponent } = useExpandedComponents();
 
@@ -131,6 +132,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setIsRefreshing(false);
+      setIsLoading(false);
       setLastUpdated(new Date());
     }
   };
@@ -199,7 +201,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
       <div className="flex-1 flex items-center">
         <div className="w-full">
           <div className="flex flex-col items-center">
-            <div className="text-xs text-gray-600 flex items-center gap-1 mb-0.5 h-4">
+            <div className="text-xs text-gray-600 flex items-center gap-1 mb-1 h-4">
               <Calendar
                 className={`w-3 h-3 ${
                   label === data?.month1Label
@@ -212,7 +214,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
               <span>{displayMonth}</span>
             </div>
             <div className="flex flex-col items-center">
-              <div className={`font-mono font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent text-xl`}>
+              <div className={`font-mono font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent text-3xl mb-1`}>
                 ₹{price.toFixed(2)}
               </div>
               <div className={`flex items-center gap-1 h-4 ${isPositive ? "text-green-600" : "text-red-600"}`}>
@@ -228,7 +230,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           </div>
         </div>
         {showDivider && (
-          <div className="h-10 w-px bg-gradient-to-b from-transparent via-gray-200 to-transparent mx-1" />
+          <div className="h-12 w-px bg-gradient-to-b from-transparent via-gray-200 to-transparent mx-1" />
         )}
       </div>
     );
@@ -236,7 +238,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg p-3 border border-red-200 shadow-sm">
+      <div className="bg-white rounded-lg p-3 border border-red-200 shadow-sm min-h-[160px]">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-red-600">MCX Aluminium</h2>
           <button
@@ -252,13 +254,45 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
     );
   }
 
-  if (!data) {
+  if (isLoading || !data) {
     return (
-      <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-gray-700">MCX Aluminium</h2>
+      <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm min-h-[190px] flex flex-col justify-between">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-blue-600 flex items-center gap-1">
+            <BarChart2 className="w-3.5 h-3.5 text-purple-600" />
+            MCX Aluminium
+          </h2>
           <div className="animate-spin">
             <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
+          </div>
+        </div>
+        
+        {/* Loading skeleton */}
+        <div className="flex flex-col flex-1 py-1.5">
+          <div className="sm:hidden flex flex-col space-y-4 mb-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex-1 flex flex-col items-center">
+                <div className="h-4 w-16 bg-gray-200 animate-pulse rounded mb-1.5"></div>
+                <div className="h-8 w-24 bg-gray-200 animate-pulse rounded mb-1.5"></div>
+                <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="hidden sm:flex items-center my-2 space-x-2 flex-1">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex-1 flex flex-col items-center">
+                <div className="h-4 w-16 bg-gray-200 animate-pulse rounded mb-1.5"></div>
+                <div className="h-8 w-24 bg-gray-200 animate-pulse rounded mb-1.5"></div>
+                <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="text-center py-1 px-2 mt-auto rounded bg-gray-100 border border-gray-200">
+            <div className="flex items-center justify-center gap-1.5">
+              <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -350,7 +384,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
               <Calendar className="w-3 h-3" />
               <h3 className={`text-xs font-medium ${item.textClass}`}>{item.label}</h3>
             </div>
-            <div className="font-mono font-bold text-xl">₹{item.price.toFixed(2)}</div>
+            <div className="font-mono font-bold text-3xl">₹{item.price.toFixed(2)}</div>
             <div className={`flex items-center gap-1 mt-1 ${item.ratePct >= 0 ? "text-green-600" : "text-red-600"}`}>
               {item.ratePct >= 0 ? 
                 <TrendingUp className="w-3 h-3" /> : 
@@ -362,22 +396,18 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
         ))}
       </div>
 
-      <div className={`mb-4 text-center py-2 px-3 rounded-lg border ${
+      <div className={`text-center py-1 px-2 mt-auto rounded ${
         isContango
-          ? "bg-green-50 border-green-200 text-green-800"
-          : "bg-red-50 border-red-200 text-red-800"
+          ? "bg-green-100 border border-green-200 text-green-800"
+          : "bg-red-100 border border-red-200 text-red-800"
       }`}>
-        <div className="flex items-center justify-center gap-2">
-          <div className={`p-1 rounded-full ${isContango ? "bg-green-100" : "bg-red-100"}`}>
-            {isContango ? 
-              <TrendingUp className="w-3.5 h-3.5" /> : 
-              <TrendingDown className="w-3.5 h-3.5" />
-            }
-          </div>
-          <div>
-            <span className="text-sm font-medium">{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
-            <p className="text-xs mt-0.5">Price difference: ₹{Math.abs(spread).toFixed(2)}</p>
-          </div>
+        <div className="flex items-center justify-center gap-1.5 text-xs">
+          <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
+          <span>₹{Math.abs(spread).toFixed(2)}</span>
+          {isContango ? 
+            <TrendingUp className="w-3 h-3" /> : 
+            <TrendingDown className="w-3 h-3" />
+          }
         </div>
       </div>
 
@@ -425,8 +455,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
   return (
     <>
       {/* Compact Card View */}
-      <div className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm min-h-[160px]">
-        <div className="flex items-center justify-between mb-2">
+      <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm min-h-[190px] flex flex-col justify-between">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-blue-600 flex items-center gap-1">
             <BarChart2 className="w-3.5 h-3.5 text-purple-600" />
             MCX Aluminium
@@ -449,9 +479,9 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           </div>
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex flex-col flex-1 py-1.5">
           {/* Mobile: Vertical layout */}
-          <div className="sm:hidden flex flex-col space-y-1.5 mb-1">
+          <div className="sm:hidden flex flex-col space-y-2.5 mb-2">
             <ContractPrice
               label={data.month1Label}
               price={data.month1Price}
@@ -479,7 +509,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           </div>
 
           {/* Desktop: Horizontal layout */}
-          <div className="hidden sm:flex items-center my-1">
+          <div className="hidden sm:flex items-center my-2">
             <ContractPrice
               label={data.month1Label}
               price={data.month1Price}
@@ -505,7 +535,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           </div>
 
           {/* Contango section */}
-          <div className={`text-center py-1 px-2 rounded ${
+          <div className={`text-center py-1 px-2 mt-auto rounded ${
             isContango
               ? "bg-green-100 border border-green-200 text-green-800"
               : "bg-red-100 border border-red-200 text-red-800"

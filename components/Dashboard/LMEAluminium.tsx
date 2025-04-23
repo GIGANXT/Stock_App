@@ -226,46 +226,52 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
   return (
     <>
       {/* Regular Card View */}
-      <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-200">
+      <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-200 min-h-[148px] relative">
         {/* Glow effect on hover - desktop only, without blur */}
         <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none bg-gradient-to-br from-blue-50/30 via-indigo-50/30 to-purple-50/30 hidden sm:block"></div>
         
-        <div className="flex items-center justify-between mb-4 relative z-10">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-2 relative z-10">
+          <div className="flex items-center gap-2">
             <div className="relative">
-              <Wifi className="w-5 h-5 text-green-600" />
-              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full">
+              <Wifi className="w-4.5 h-4.5 text-green-600" />
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full">
                 <div className="absolute inset-0 bg-green-500 rounded-full animate-ping" />
               </div>
             </div>
-            <h2 className="text-lg font-bold text-blue-600">Spot Price</h2>
+            <h2 className="text-base font-bold text-blue-600">Spot Price</h2>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button
               onClick={fetchPriceData}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
               disabled={isRefreshing}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
             <button
               onClick={() => addExpandedComponent('LMEAluminium')}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
               aria-label="Expand view"
             >
-              <Maximize2 className="w-3.5 h-3.5" />
+              <Maximize2 className="w-3 h-3" />
             </button>
           </div>
         </div>
 
         {loading ? (
-          <div className="text-center py-4 relative z-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-sm text-gray-500 mt-2">Loading price data...</p>
+          <div className="relative z-10">
+            <div className="h-9 w-32 bg-gray-200 animate-pulse rounded mb-2"></div>
+            <div className="h-6 w-36 bg-gray-200 animate-pulse rounded"></div>
           </div>
         ) : error ? (
-          <div className="text-center py-4 relative z-10">
-            <p className="text-sm text-red-500">{error}</p>
+          <div className="relative z-10">
+            <p className="text-sm text-red-500 mb-1">{error}</p>
+            <div className="flex items-baseline gap-2">
+              <span className="font-mono font-bold text-3xl text-blue-600">
+                ${spotPrice.toFixed(2)}
+              </span>
+              <span className="text-gray-500">/MT</span>
+            </div>
             <p className="text-xs text-gray-500 mt-1">Using default values</p>
           </div>
         ) : (

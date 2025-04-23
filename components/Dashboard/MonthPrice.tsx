@@ -243,25 +243,25 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
   return (
     <>
       {/* Regular Card View */}
-      <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-200">
+      <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-200 min-h-[148px] relative">
         {/* Glow effect on hover - desktop only, without blur */}
         <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none bg-gradient-to-br from-purple-50/30 via-indigo-50/30 to-violet-50/30 hidden sm:block"></div>
         
-        <div className="flex items-center justify-between mb-3 relative z-10">
+        <div className="flex items-center justify-between mb-2 relative z-10">
           <h2 className="text-base font-bold text-purple-600">3-Month LME</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={fetchData}
               disabled={isRefreshing}
               className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => addExpandedComponent('MonthPrice')}
               className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
             >
-              <Maximize2 className="w-3.5 h-3.5" />
+              <Maximize2 className="w-3 h-3" />
             </button>
           </div>
         </div>
@@ -271,10 +271,10 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
 
         <div className="flex items-baseline gap-1 relative z-10">
           {isLoading ? (
-            <div className="h-7 w-20 bg-gray-200 animate-pulse rounded"></div>
+            <div className="h-9 w-32 bg-gray-200 animate-pulse rounded"></div>
           ) : (
             <>
-              <span className="font-mono font-bold text-2xl text-purple-600">
+              <span className="font-mono font-bold text-3xl text-purple-600">
                 ${price.toFixed(2)}
               </span>
               <span className="text-sm text-gray-500">/MT</span>
@@ -283,7 +283,7 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
         </div>
 
         {isLoading ? (
-          <div className="h-6 w-24 bg-gray-200 animate-pulse rounded mt-1.5"></div>
+          <div className="h-6 w-36 bg-gray-200 animate-pulse rounded mt-1.5"></div>
         ) : (
           <div className={`flex items-center gap-1.5 mt-1.5 ${isIncrease ? "text-green-600" : "text-red-600"} relative z-10`}>
             <div className={`p-0.5 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
@@ -295,7 +295,9 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
           </div>
         )}
 
-        {!isLoading && timestamp && (
+        {isLoading ? (
+          <div className="h-4 w-40 bg-gray-200 animate-pulse rounded mt-2"></div>
+        ) : timestamp && (
           <div className="text-xs text-gray-500 mt-2 relative z-10">
             Last updated: {new Date(timestamp).toLocaleString()}
           </div>

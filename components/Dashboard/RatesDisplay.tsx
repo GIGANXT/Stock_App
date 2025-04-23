@@ -274,11 +274,51 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
   // Display loading state when no data is available
   if (isLoading && !expanded) {
     return (
-      <div className={`relative bg-white rounded-xl p-4 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] min-h-[260px] flex items-center justify-center ${className}`}>
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-          <span className="text-gray-600">Loading rates...</span>
-          {error && <span className="text-red-500 text-sm mt-2">{error}</span>}
+      <div className={`relative bg-white rounded-xl p-4 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] min-h-[300px] ${className}`}>
+        <div className="flex items-center justify-between mb-4 relative z-10">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+              <Banknote className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+              Exchange Rates
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={true}
+              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Refresh rates"
+            >
+              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 animate-spin" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col h-[calc(100%-4rem)] relative z-10">
+          <div className="flex-1 flex flex-col justify-evenly">
+            {/* RBI Rate skeleton */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="h-5 w-20 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+              <div className="h-9 w-32 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+            
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent my-2" />
+            
+            {/* SBI Rate skeleton */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="h-5 w-20 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+              <div className="h-9 w-32 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-40 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -347,7 +387,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
   return (
     <>
       <div
-        className={`relative bg-white rounded-xl p-4 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-200 min-h-[260px] group ${className}`}
+        className={`relative bg-white rounded-xl p-4 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-200 min-h-[300px] group ${className}`}
       >
         {/* Glow effect on hover - desktop only */}
         <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none bg-gradient-to-br from-blue-50/30 via-purple-50/30 to-pink-50/30 hidden sm:block"></div>
