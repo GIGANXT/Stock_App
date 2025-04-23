@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Link from "next/link";
 import Layout from "../components/Layout";
 import { ExpandedComponentsProvider } from "../context/ExpandedComponentsContext";
 
@@ -15,8 +14,6 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
   const isPrivacyPage = pathname === "/privacy-policy";
   const isTermsPage = pathname === "/terms-of-service";
   const isCookiesPage = pathname === "/cookie-policy";
-
-
   if (isAuthPage) {
     return children;
   }
