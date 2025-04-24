@@ -346,7 +346,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
 
         <div className="space-y-6 relative z-10 flex-grow flex flex-col">
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm min-h-[200px] flex flex-col">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 h-6">
               <label className="text-sm font-medium text-gray-700">
                 MCX Aluminum Price (₹/kg)
               </label>
@@ -357,63 +357,64 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
               )}
             </div>
             
-            {mcxLoading && !mcxPriceData ? (
-              <div className="flex flex-col flex-1">
-                <div className="mb-5"></div>
-                {renderPriceInputSkeleton()}
-                <div className="mt-5"></div>
-              </div>
-            ) : (
-              <div className="relative flex-grow flex items-center">
-                <div className="relative flex items-center w-full bg-gray-50 rounded-full border border-gray-200 overflow-hidden">
-                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-medium">
-                    ₹
-                  </div>
-                  <input
-                    ref={mcxPriceFieldRef}
-                    type="number"
-                    value={mcxPrice}
-                    onChange={handleMcxPriceChange}
-                    className="w-full pl-10 pr-32 py-3.5 bg-transparent text-gray-700 text-lg
-                      focus:outline-none focus:ring-0 border-0
-                      placeholder:text-gray-400
-                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
-                      [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="Enter MCX price"
-                    disabled={isMcxLiveMode}
-                  />
-                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                    <button
-                      onClick={toggleMcxLiveMode}
-                      disabled={mcxLoading}
-                      className={`px-4 py-2 rounded-full text-sm font-medium 
-                        flex items-center gap-1.5 transition-all duration-300 ${
-                        isMcxLiveMode
-                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      } ${mcxLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {mcxLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : isMcxLiveMode ? (
-                        <>
-                          <Wifi className="w-4 h-4" />
-                          <span>Live</span>
-                        </>
-                      ) : (
-                        <>
-                          <WifiOff className="w-4 h-4" />
-                          <span>Manual</span>
-                        </>
-                      )}
-                    </button>
+            <div className="h-14 mb-3">
+              {mcxLoading && !mcxPriceData ? (
+                <div className="flex flex-col flex-1">
+                  <div className="mb-5"></div>
+                  {renderPriceInputSkeleton()}
+                  <div className="mt-5"></div>
+                </div>
+              ) : (
+                <div className="relative flex-grow flex items-center">
+                  <div className="relative flex items-center w-full bg-gray-50 rounded-full border border-gray-200 overflow-hidden">
+                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-medium">
+                      ₹
+                    </div>
+                    <input
+                      ref={mcxPriceFieldRef}
+                      type="number"
+                      value={mcxPrice}
+                      onChange={handleMcxPriceChange}
+                      className="w-full pl-10 pr-32 py-3.5 bg-transparent text-gray-700 text-lg
+                        focus:outline-none focus:ring-0 border-0
+                        placeholder:text-gray-400
+                        [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
+                        [&::-webkit-inner-spin-button]:appearance-none"
+                      placeholder="Enter MCX price"
+                      disabled={isMcxLiveMode}
+                    />
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      <button
+                        onClick={toggleMcxLiveMode}
+                        disabled={mcxLoading}
+                        className={`px-4 py-2 rounded-full text-sm font-medium 
+                          flex items-center gap-1.5 transition-all duration-300 ${
+                          isMcxLiveMode
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        } ${mcxLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {mcxLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : isMcxLiveMode ? (
+                          <>
+                            <Wifi className="w-4 h-4" />
+                            <span>Live</span>
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className="w-4 h-4" />
+                            <span>Manual</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             
-            {/* MCX Month Buttons - Fixed height container */}
-            <div className="mt-3 h-[40px] flex-shrink-0">
+            <div className="h-10 mb-2">
               {loadingMonths ? (
                 renderButtonsSkeleton()
               ) : (
@@ -463,20 +464,19 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
               )}
             </div>
             
-            {mcxConnectionError && (
-              <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                {mcxConnectionError}
-              </p>
-            )}
-            
-            {/* Display last update time */}
-            {mcxLastUpdate && isMcxLiveMode && (
-              <p className="mt-1.5 text-xs text-blue-500 flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                Last updated: {mcxLastUpdate.toLocaleTimeString()}
-              </p>
-            )}
+            <div className="h-4 flex items-center text-xs">
+              {mcxConnectionError ? (
+                <p className="text-red-500 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-red-500"></span>
+                  {mcxConnectionError}
+                </p>
+              ) : mcxLastUpdate && isMcxLiveMode ? (
+                <p className="text-blue-500 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-blue-500"></span>
+                  Last updated: {mcxLastUpdate.toLocaleTimeString()}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm h-[132px] flex flex-col">
@@ -498,7 +498,6 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 placeholder="Enter premium"
               />
             </div>
-            {/* Space was adjusted by using a fixed height on the container */}
           </div>
 
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm min-h-[100px] flex flex-col">
@@ -581,87 +580,82 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
 
         <div className="space-y-6 relative z-10 flex-grow flex flex-col">
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm min-h-[200px] flex flex-col">
-            <div className="flex items-center justify-between mb-2">
+            <div className="mb-1">
               <label className="text-sm font-medium text-gray-700">
                 LME Aluminum Price (USD/MT)
               </label>
             </div>
             
-            {/* Fixed height space to match MCX card */}
-            <div className="mb-5 flex-shrink-0"></div>
-            
-            {lmeLoading && !lmePriceData ? (
-              <div className="flex flex-col flex-1">
-                <div className="mb-5"></div>
-                {renderPriceInputSkeleton()}
-                <div className="mt-5"></div>
-              </div>
-            ) : (
-              <div className="relative flex-grow flex items-center">
-                <div className="relative flex items-center w-full bg-gray-50 rounded-full border border-gray-200 overflow-hidden">
-                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-medium">
-                    $
-                  </div>
-                  <input
-                    ref={lmePriceFieldRef}
-                    type="number"
-                    value={lmePrice}
-                    onChange={handleLmePriceChange}
-                    className="w-full pl-10 pr-32 py-3.5 bg-transparent text-gray-700 text-lg
-                      focus:outline-none focus:ring-0 border-0
-                      placeholder:text-gray-400
-                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
-                      [&::-webkit-inner-spin-button]:appearance-none"
-                    placeholder="Enter LME price"
-                    disabled={isLmeLiveMode}
-                  />
-                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                    <button
-                      onClick={toggleLmeLiveMode}
-                      disabled={lmeLoading}
-                      className={`px-4 py-2 rounded-full text-sm font-medium 
-                        flex items-center gap-1.5 transition-all duration-300 ${
-                        isLmeLiveMode
-                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      } ${lmeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {lmeLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : isLmeLiveMode ? (
-                        <>
-                          <Wifi className="w-4 h-4" />
-                          <span>Live</span>
-                        </>
-                      ) : (
-                        <>
-                          <WifiOff className="w-4 h-4" />
-                          <span>Manual</span>
-                        </>
-                      )}
-                    </button>
+            <div className="mb-1">
+              {lmeLoading && !lmePriceData ? (
+                <div className="w-full py-2">
+                  {renderPriceInputSkeleton()}
+                </div>
+              ) : (
+                <div className="w-full">
+                  <div className="relative flex items-center w-full bg-gray-50 rounded-full border border-gray-200 overflow-hidden">
+                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-medium">
+                      $
+                    </div>
+                    <input
+                      ref={lmePriceFieldRef}
+                      type="number"
+                      value={lmePrice}
+                      onChange={handleLmePriceChange}
+                      className="w-full pl-10 pr-32 py-3.5 bg-transparent text-gray-700 text-lg
+                        focus:outline-none focus:ring-0 border-0
+                        placeholder:text-gray-400
+                        [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
+                        [&::-webkit-inner-spin-button]:appearance-none"
+                      placeholder="Enter LME price"
+                      disabled={isLmeLiveMode}
+                    />
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      <button
+                        onClick={toggleLmeLiveMode}
+                        disabled={lmeLoading}
+                        className={`px-4 py-2 rounded-full text-sm font-medium 
+                          flex items-center gap-1.5 transition-all duration-300 ${
+                          isLmeLiveMode
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        } ${lmeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {lmeLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : isLmeLiveMode ? (
+                          <>
+                            <Wifi className="w-4 h-4" />
+                            <span>Live</span>
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className="w-4 h-4" />
+                            <span>Manual</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             
-            {/* Fixed height space to match MCX month buttons row */}
-            <div className="h-[40px] mt-3 flex-shrink-0"></div>
+            <div className="flex-grow min-h-[56px]"></div>
             
-            {lmeConnectionError && (
-              <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                {lmeConnectionError}
-              </p>
-            )}
-            
-            {/* Display last update time */}
-            {lmeLastUpdate && isLmeLiveMode && (
-              <p className="mt-1.5 text-xs text-purple-500 flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                Last updated: {lmeLastUpdate.toLocaleTimeString()}
-              </p>
-            )}
+            <div className="h-4 flex items-center text-xs">
+              {lmeConnectionError ? (
+                <p className="text-red-500 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-red-500"></span>
+                  {lmeConnectionError}
+                </p>
+              ) : lmeLastUpdate && isLmeLiveMode ? (
+                <p className="text-purple-500 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-purple-500"></span>
+                  Last updated: {lmeLastUpdate.toLocaleTimeString()}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm h-[132px] flex flex-col">

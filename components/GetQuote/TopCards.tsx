@@ -60,7 +60,7 @@ const LiveSpotCardLoading = () => (
   </div>
 );
 
-const MCXMonthCard = ({ month, price, change, changeValue, isLoading = false }: MCXMonthCardProps) => {
+const MCXMonthCard = ({ month, price, change, isLoading = false }: Omit<MCXMonthCardProps, 'changeValue'>) => {
   const isIncrease = change >= 0;
   const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
   const trendColor = isIncrease ? "text-green-600" : "text-red-600";
@@ -114,7 +114,7 @@ const MCXMonthCard = ({ month, price, change, changeValue, isLoading = false }: 
         <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-2 font-medium pl-1`}>
           <TrendIcon className="w-4 h-4 flex-shrink-0" />
           <span className="whitespace-nowrap">
-            {isIncrease ? '+' : '-'}₹{Math.abs(changeValue).toFixed(2)} ({Math.abs(change).toFixed(2)}%)
+            {isIncrease ? '+' : ''}{Math.abs(change).toFixed(2)}%
           </span>
         </div>
       </div>
@@ -254,7 +254,6 @@ const TopCards = () => {
                 month="Loading..." 
                 price={0} 
                 change={0}
-                changeValue={0}
                 isLoading={true} 
               />
             </div>
@@ -263,7 +262,6 @@ const TopCards = () => {
                 month="Loading..." 
                 price={0} 
                 change={0}
-                changeValue={0}
                 isLoading={true} 
               />
             </div>
@@ -272,7 +270,6 @@ const TopCards = () => {
                 month="Loading..." 
                 price={0} 
                 change={0}
-                changeValue={0}
                 isLoading={true} 
               />
             </div>
@@ -327,7 +324,6 @@ const TopCards = () => {
               month={displayData.month1Label}
               price={displayData.month1Price}
               change={displayData.month1RatePct}
-              changeValue={displayData.month1RateVal}
             />
           </div>
           <div className="w-full h-full px-2">
@@ -335,7 +331,6 @@ const TopCards = () => {
               month={displayData.month2Label}
               price={displayData.month2Price} 
               change={displayData.month2RatePct}
-              changeValue={displayData.month2RateVal}
             />
           </div>
           <div className="w-full h-full px-2">
@@ -343,7 +338,6 @@ const TopCards = () => {
               month={displayData.month3Label}
               price={displayData.month3Price}
               change={displayData.month3RatePct}
-              changeValue={displayData.month3RateVal}
             />
           </div>
         </div>

@@ -166,18 +166,13 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
               <span className="text-gray-500">/MT</span>
             </div>
 
-            <div className={`flex items-center gap-2 ${isIncrease ? "text-green-600" : "text-red-600"} bg-white p-2 rounded-lg border ${isIncrease ? "border-green-100" : "border-red-100"}`}>
+            <div className={`flex items-center gap-2 mt-2 ${isIncrease ? "text-green-600" : "text-red-600"} relative z-10`}>
               <div className={`p-1 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
                 {isIncrease ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
               </div>
-              <div>
-                <span className="text-sm font-medium">
-                  {isIncrease ? "+" : ""}
-                  {spotChange.toFixed(2)} ({isIncrease ? "+" : ""}
-                  {spotChangePercent.toFixed(2)}%)
-                </span>
-                <p className="text-xs text-gray-500">From previous close</p>
-              </div>
+              <span className="font-medium">
+                {isIncrease ? "+" : ""}{spotChangePercent.toFixed(2)}%
+              </span>
             </div>
           </div>
 
@@ -288,9 +283,7 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
                 {isIncrease ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
               </div>
               <span className="font-medium">
-                {isIncrease ? "+" : ""}
-                {spotChange.toFixed(2)} ({isIncrease ? "+" : ""}
-                {spotChangePercent.toFixed(2)}%)
+                {isIncrease ? "+" : ""}{spotChangePercent.toFixed(2)}%
               </span>
             </div>
           </>

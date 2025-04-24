@@ -151,7 +151,7 @@ export default function LiveSpotCard({
                             <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-2 font-medium`}>
                                 <TrendIcon className="w-4 h-4 flex-shrink-0 crisp-text" />
                                 <span className="whitespace-nowrap crisp-text">
-                                    {isIncrease ? '+' : '-'}${Math.abs(currentChange).toFixed(2)} ({currentChangePercent.toFixed(2)}%)
+                                    {isIncrease ? '+' : ''}{currentChangePercent.toFixed(2)}%
                                 </span>
                             </div>
                         </>
