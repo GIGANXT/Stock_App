@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Calculator, Wifi, WifiOff, Clock, Loader2, ArrowRight, Sparkles, Calendar } from 'lucide-react';
-import { format } from 'date-fns';
+import { Calculator, Wifi, WifiOff, Loader2, ArrowRight, Sparkles, Calendar } from 'lucide-react';
 import { useMCXPrice } from '../../hook/useMCXPrice';
 import { useLMEPrice } from '../../hook/useLMEPrice';
 import { useExchangeRates } from '../../hook/useExchangeRates';
@@ -24,6 +23,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   
   const [isMcxLiveMode, setIsMcxLiveMode] = useState(false);
   const [isLmeLiveMode, setIsLmeLiveMode] = useState(false);
+  // Track last update times for status indicators
   const [mcxLastUpdate, setMcxLastUpdate] = useState<Date | null>(null);
   const [lmeLastUpdate, setLmeLastUpdate] = useState<Date | null>(null);
   const [mcxConnectionError, setMcxConnectionError] = useState<string | null>(null);
@@ -41,8 +41,8 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   const { ratesData, loading: ratesLoading, error: ratesError } = useExchangeRates();
 
   const DUTY_FACTOR = 1.0825;
-  const RBI_RATE = ratesData.RBI || 0;
-  const SBI_TT_RATE = ratesData.SBI || 0;
+  const RBI_RATE = ratesData?.RBI || 0;
+  const SBI_TT_RATE = ratesData?.SBI || 0;
 
   // Add state for MCX month data
   const [mcxMonthsData, setMcxMonthsData] = useState<{
@@ -59,7 +59,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   useEffect(() => {
     let updateTimeout: NodeJS.Timeout;
 
-    if (isMcxLiveMode && mcxPriceData) {
+    if (isMcxLiveMode && mcxPriceData && mcxPriceData.currentPrice) {
       // If a specific month is selected, don't override with the live data
       if (!selectedMonth && mcxMonthsData) {
         // Auto-select the first month when activating live mode on fresh page
@@ -86,7 +86,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   useEffect(() => {
     let updateTimeout: NodeJS.Timeout;
 
-    if (isLmeLiveMode && lmePriceData) {
+    if (isLmeLiveMode && lmePriceData && lmePriceData.currentPrice) {
       setLmePrice(lmePriceData.currentPrice.toFixed(2));
       setLmeLastUpdate(new Date(lmePriceData.lastUpdated));
       setIsLmePriceUpdating(true);
@@ -192,6 +192,13 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
     const premium = parseFloat(lmePremium) || 0;
     const freight = parseFloat(lmeFreight) || 0;
     const exchangeRate = exchangeRateType === 'RBI' ? RBI_RATE : SBI_TT_RATE;
+    
+    // Convert from USD/MT to INR/kg:
+    // 1. Add price and premium (in USD/MT)
+    // 2. Apply duty factor
+    // 3. Convert to INR using exchange rate
+    // 4. Convert from per MT to per kg (divide by 1000)
+    // 5. Add freight (already in INR/kg)
     return (((price + premium) * DUTY_FACTOR * exchangeRate) / 1000) + freight;
   };
 
@@ -293,14 +300,14 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
 
   // Render skeleton loaders for the inputs
   const renderPriceInputSkeleton = () => (
-    <div className="animate-pulse">
-      <div className="h-12 bg-gray-200 rounded-lg w-full"></div>
+    <div className="animate-pulse flex-grow flex items-center">
+      <div className="h-12 bg-gray-200 rounded-full w-full"></div>
     </div>
   );
 
   // Render skeleton for buttons
   const renderButtonsSkeleton = () => (
-    <div className="flex items-center justify-between gap-2 mt-3 animate-pulse">
+    <div className="flex items-center justify-between gap-2 mt-0 animate-pulse h-full">
       <div className="h-8 bg-gray-200 rounded-lg flex-1"></div>
       <div className="h-8 bg-gray-200 rounded-lg flex-1"></div>
       <div className="h-8 bg-gray-200 rounded-lg flex-1"></div>
@@ -320,7 +327,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   return (
     <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 ${className}`}>
       {/* MCX Based Price */}
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-lg p-6 border border-blue-100 h-full relative overflow-hidden group">
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-lg p-6 border border-blue-100 h-full relative overflow-hidden group flex flex-col">
         {/* Background graphics */}
         <div className="absolute bottom-0 right-0 w-48 h-48 bg-blue-600/5 rounded-full -mr-20 -mb-20 z-0"></div>
         <div className="absolute top-0 left-0 w-32 h-32 bg-indigo-600/5 rounded-full -ml-10 -mt-10 z-0"></div>
@@ -337,120 +344,124 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
           </div>
         </div>
 
-        <div className="space-y-6 relative z-10">
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center justify-between">
-              <span>MCX Aluminum Price (₹/kg)</span>
-              {isMcxLiveMode && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                  </span>
-                  Live
-                </span>
-              )}
-              {selectedMonth && !isMcxLiveMode && (
+        <div className="space-y-6 relative z-10 flex-grow flex flex-col">
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm min-h-[200px] flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">
+                MCX Aluminum Price (₹/kg)
+              </label>
+              {selectedMonth && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
                   {selectedMonth}
                 </span>
               )}
-            </label>
+            </div>
             
             {mcxLoading && !mcxPriceData ? (
-              renderPriceInputSkeleton()
+              <div className="flex flex-col flex-1">
+                <div className="mb-5"></div>
+                {renderPriceInputSkeleton()}
+                <div className="mt-5"></div>
+              </div>
             ) : (
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500">₹</span>
+              <div className="relative flex-grow flex items-center">
+                <div className="relative flex items-center w-full bg-gray-50 rounded-full border border-gray-200 overflow-hidden">
+                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-medium">
+                    ₹
+                  </div>
+                  <input
+                    ref={mcxPriceFieldRef}
+                    type="number"
+                    value={mcxPrice}
+                    onChange={handleMcxPriceChange}
+                    className="w-full pl-10 pr-32 py-3.5 bg-transparent text-gray-700 text-lg
+                      focus:outline-none focus:ring-0 border-0
+                      placeholder:text-gray-400
+                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
+                      [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="Enter MCX price"
+                    disabled={isMcxLiveMode}
+                  />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    <button
+                      onClick={toggleMcxLiveMode}
+                      disabled={mcxLoading}
+                      className={`px-4 py-2 rounded-full text-sm font-medium 
+                        flex items-center gap-1.5 transition-all duration-300 ${
+                        isMcxLiveMode
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      } ${mcxLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {mcxLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : isMcxLiveMode ? (
+                        <>
+                          <Wifi className="w-4 h-4" />
+                          <span>Live</span>
+                        </>
+                      ) : (
+                        <>
+                          <WifiOff className="w-4 h-4" />
+                          <span>Manual</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <input
-                  ref={mcxPriceFieldRef}
-                  type="number"
-                  value={mcxPrice}
-                  onChange={handleMcxPriceChange}
-                  className="w-full pl-8 pr-24 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 
-                    focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300
-                    [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
-                    [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="Enter MCX price"
-                  disabled={isMcxLiveMode}
-                />
-                <button
-                  onClick={toggleMcxLiveMode}
-                  disabled={mcxLoading}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-full text-sm font-medium 
-                    flex items-center gap-1.5 transition-all duration-300 ${
-                    isMcxLiveMode
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  } ${mcxLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {mcxLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isMcxLiveMode ? (
-                    <>
-                      <Wifi className="w-4 h-4" />
-                      Live
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="w-4 h-4" />
-                      Manual
-                    </>
-                  )}
-                </button>
               </div>
             )}
             
-            {/* MCX Month Buttons */}
-            {loadingMonths ? (
-              renderButtonsSkeleton()
-            ) : (
-              <div className="flex items-center justify-between gap-2 mt-3">
-                {mcxMonthsData ? (
-                  <>
-                    <button
-                      onClick={() => setMonthPrice(1)}
-                      className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${
-                        selectedMonth === mcxMonthsData.month1Label
-                          ? 'bg-blue-100 border-blue-200 text-blue-800'
-                          : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50'
-                      }`}
-                    >
-                      <Calendar className="w-3 h-3" />
-                      <span>{mcxMonthsData.month1Label.split(' ')[0]}</span>
-                    </button>
-                    <button
-                      onClick={() => setMonthPrice(2)}
-                      className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${
-                        selectedMonth === mcxMonthsData.month2Label
-                          ? 'bg-purple-100 border-purple-200 text-purple-800'
-                          : 'bg-white border-gray-200 text-gray-700 hover:bg-purple-50'
-                      }`}
-                    >
-                      <Calendar className="w-3 h-3" />
-                      <span>{mcxMonthsData.month2Label.split(' ')[0]}</span>
-                    </button>
-                    <button
-                      onClick={() => setMonthPrice(3)}
-                      className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${
-                        selectedMonth === mcxMonthsData.month3Label
-                          ? 'bg-pink-100 border-pink-200 text-pink-800'
-                          : 'bg-white border-gray-200 text-gray-700 hover:bg-pink-50'
-                      }`}
-                    >
-                      <Calendar className="w-3 h-3" />
-                      <span>{mcxMonthsData.month3Label.split(' ')[0]}</span>
-                    </button>
-                  </>
-                ) : (
-                  <div className="w-full text-center py-2 text-xs text-gray-500">
-                    No month data available
-                  </div>
-                )}
-              </div>
-            )}
+            {/* MCX Month Buttons - Fixed height container */}
+            <div className="mt-3 h-[40px] flex-shrink-0">
+              {loadingMonths ? (
+                renderButtonsSkeleton()
+              ) : (
+                <div className="flex items-center justify-between gap-2 h-full">
+                  {mcxMonthsData ? (
+                    <>
+                      <button
+                        onClick={() => setMonthPrice(1)}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${
+                          selectedMonth === mcxMonthsData.month1Label
+                            ? 'bg-blue-100 border-blue-200 text-blue-800'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50'
+                        }`}
+                      >
+                        <Calendar className="w-3 h-3" />
+                        <span>{mcxMonthsData.month1Label.split(' ')[0]}</span>
+                      </button>
+                      <button
+                        onClick={() => setMonthPrice(2)}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${
+                          selectedMonth === mcxMonthsData.month2Label
+                            ? 'bg-purple-100 border-purple-200 text-purple-800'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-purple-50'
+                        }`}
+                      >
+                        <Calendar className="w-3 h-3" />
+                        <span>{mcxMonthsData.month2Label.split(' ')[0]}</span>
+                      </button>
+                      <button
+                        onClick={() => setMonthPrice(3)}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${
+                          selectedMonth === mcxMonthsData.month3Label
+                            ? 'bg-pink-100 border-pink-200 text-pink-800'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-pink-50'
+                        }`}
+                      >
+                        <Calendar className="w-3 h-3" />
+                        <span>{mcxMonthsData.month3Label.split(' ')[0]}</span>
+                      </button>
+                    </>
+                  ) : (
+                    <div className="w-full text-center py-2 text-xs text-gray-500">
+                      No month data available
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             
             {mcxConnectionError && (
               <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
@@ -458,19 +469,21 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 {mcxConnectionError}
               </p>
             )}
+            
+            {/* Display last update time */}
             {mcxLastUpdate && isMcxLiveMode && (
-              <div className="mt-1.5 flex items-center gap-1 text-xs text-gray-500">
-                <Clock className="w-3 h-3" />
-                Last updated: {format(mcxLastUpdate, 'HH:mm:ss')}
-              </div>
+              <p className="mt-1.5 text-xs text-blue-500 flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                Last updated: {mcxLastUpdate.toLocaleTimeString()}
+              </p>
             )}
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm">
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm h-[132px] flex flex-col">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Premium (₹/kg)
             </label>
-            <div className="relative">
+            <div className="relative flex-grow">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <span className="text-gray-500">₹</span>
               </div>
@@ -485,13 +498,14 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 placeholder="Enter premium"
               />
             </div>
+            {/* Space was adjusted by using a fixed height on the container */}
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm">
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-100 shadow-sm min-h-[100px] flex flex-col">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Freight (₹/kg)
             </label>
-            <div className="relative">
+            <div className="relative flex-grow">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <span className="text-gray-500">₹</span>
               </div>
@@ -508,7 +522,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-blue-200/50">
+          <div className="pt-4 border-t border-blue-200/50 min-h-[120px] flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <label className="text-sm font-medium text-gray-700">
                 Total Price (per kg)
@@ -522,7 +536,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
             {!isDataReady && mcxLoading ? (
               renderTotalPriceSkeleton()
             ) : (
-              <div className="relative">
+              <div className="relative flex-grow">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <span className="text-white font-medium">₹</span>
                 </div>
@@ -548,7 +562,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
       </div>
 
       {/* LME Based Price */}
-      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-lg p-6 border border-purple-100 h-full relative overflow-hidden group">
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-lg p-6 border border-purple-100 h-full relative overflow-hidden group flex flex-col">
         {/* Background graphics */}
         <div className="absolute bottom-0 right-0 w-48 h-48 bg-purple-600/5 rounded-full -mr-20 -mb-20 z-0"></div>
         <div className="absolute top-0 left-0 w-32 h-32 bg-pink-600/5 rounded-full -ml-10 -mt-10 z-0"></div>
@@ -565,66 +579,74 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
           </div>
         </div>
 
-        <div className="space-y-6 relative z-10">
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center justify-between">
-              <span>LME Aluminum Price (USD/MT)</span>
-              {isLmeLiveMode && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                  </span>
-                  Live
-                </span>
-              )}
-            </label>
+        <div className="space-y-6 relative z-10 flex-grow flex flex-col">
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm min-h-[200px] flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">
+                LME Aluminum Price (USD/MT)
+              </label>
+            </div>
+            
+            {/* Fixed height space to match MCX card */}
+            <div className="mb-5 flex-shrink-0"></div>
             
             {lmeLoading && !lmePriceData ? (
-              renderPriceInputSkeleton()
+              <div className="flex flex-col flex-1">
+                <div className="mb-5"></div>
+                {renderPriceInputSkeleton()}
+                <div className="mt-5"></div>
+              </div>
             ) : (
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500">$</span>
+              <div className="relative flex-grow flex items-center">
+                <div className="relative flex items-center w-full bg-gray-50 rounded-full border border-gray-200 overflow-hidden">
+                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-medium">
+                    $
+                  </div>
+                  <input
+                    ref={lmePriceFieldRef}
+                    type="number"
+                    value={lmePrice}
+                    onChange={handleLmePriceChange}
+                    className="w-full pl-10 pr-32 py-3.5 bg-transparent text-gray-700 text-lg
+                      focus:outline-none focus:ring-0 border-0
+                      placeholder:text-gray-400
+                      [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
+                      [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="Enter LME price"
+                    disabled={isLmeLiveMode}
+                  />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    <button
+                      onClick={toggleLmeLiveMode}
+                      disabled={lmeLoading}
+                      className={`px-4 py-2 rounded-full text-sm font-medium 
+                        flex items-center gap-1.5 transition-all duration-300 ${
+                        isLmeLiveMode
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      } ${lmeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {lmeLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : isLmeLiveMode ? (
+                        <>
+                          <Wifi className="w-4 h-4" />
+                          <span>Live</span>
+                        </>
+                      ) : (
+                        <>
+                          <WifiOff className="w-4 h-4" />
+                          <span>Manual</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <input
-                  ref={lmePriceFieldRef}
-                  type="number"
-                  value={lmePrice}
-                  onChange={handleLmePriceChange}
-                  className="w-full pl-8 pr-24 py-3 bg-white border-2 border-gray-200 rounded-lg text-gray-700 
-                    focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300
-                    [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none 
-                    [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="Enter LME price"
-                  disabled={isLmeLiveMode}
-                />
-                <button
-                  onClick={toggleLmeLiveMode}
-                  disabled={lmeLoading}
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-full text-sm font-medium 
-                    flex items-center gap-1.5 transition-all duration-300 ${
-                    isLmeLiveMode
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  } ${lmeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {lmeLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isLmeLiveMode ? (
-                    <>
-                      <Wifi className="w-4 h-4" />
-                      Live
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="w-4 h-4" />
-                      Manual
-                    </>
-                  )}
-                </button>
               </div>
             )}
+            
+            {/* Fixed height space to match MCX month buttons row */}
+            <div className="h-[40px] mt-3 flex-shrink-0"></div>
             
             {lmeConnectionError && (
               <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
@@ -632,19 +654,33 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 {lmeConnectionError}
               </p>
             )}
+            
+            {/* Display last update time */}
             {lmeLastUpdate && isLmeLiveMode && (
-              <div className="mt-1.5 flex items-center gap-1 text-xs text-gray-500">
-                <Clock className="w-3 h-3" />
-                Last updated: {format(lmeLastUpdate, 'HH:mm:ss')}
-              </div>
+              <p className="mt-1.5 text-xs text-purple-500 flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                Last updated: {lmeLastUpdate.toLocaleTimeString()}
+              </p>
             )}
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Premium (USD/MT)
-            </label>
-            <div className="flex gap-2">
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm h-[132px] flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-gray-700">
+                Premium (USD/MT)
+              </label>
+              {!ratesLoading ? (
+                <div className="text-xs font-medium bg-white border border-purple-200 text-purple-700 px-2.5 py-1 rounded-lg shadow-sm">
+                  Exchange Rate: <span className="font-semibold">₹{exchangeRateType === 'RBI' ? RBI_RATE.toFixed(4) : SBI_TT_RATE.toFixed(4)}</span>
+                </div>
+              ) : (
+                <div className="text-xs font-medium bg-white border border-purple-200 text-purple-600 px-2.5 py-1 rounded-lg shadow-sm animate-pulse flex items-center">
+                  <div className="w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full mr-1.5 animate-spin"></div>
+                  Updating...
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 flex-grow">
               <div className="relative flex-1">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <span className="text-gray-500">$</span>
@@ -685,25 +721,13 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 </button>
               </div>
             </div>
-            <div className="mt-2 text-xs text-gray-600 flex items-center justify-between">
-              {ratesLoading ? (
-                <div className="w-full animate-pulse flex items-center">
-                  <div className="h-3 bg-gray-200 rounded w-24"></div>
-                </div>
-              ) : (
-                <span>
-                  Rate: <span className="font-medium text-purple-700">₹{exchangeRateType === 'RBI' ? RBI_RATE.toFixed(4) : SBI_TT_RATE.toFixed(4)}</span>
-                </span>
-              )}
-              {ratesLoading && <span className="text-purple-600 animate-pulse">Updating rates...</span>}
-            </div>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm">
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm min-h-[100px] flex flex-col">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Freight (₹/kg)
             </label>
-            <div className="relative">
+            <div className="relative flex-grow">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <span className="text-gray-500">₹</span>
               </div>
@@ -719,7 +743,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-purple-200/50">
+          <div className="pt-4 border-t border-purple-200/50 min-h-[120px] flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <label className="text-sm font-medium text-gray-700">
                 Total Price (per kg)
@@ -735,7 +759,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 <div className="h-14 bg-gradient-to-r from-purple-400/60 to-pink-400/60 rounded-lg w-full"></div>
               </div>
             ) : (
-              <div className="relative">
+              <div className="relative flex-grow">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <span className="text-white font-medium">₹</span>
                 </div>

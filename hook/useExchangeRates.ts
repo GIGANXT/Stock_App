@@ -31,6 +31,8 @@ export function useExchangeRates() {
   useEffect(() => {
     let mounted = true;
     let updateInterval: NodeJS.Timeout;
+    let retryTimeout: NodeJS.Timeout;
+    const RETRY_DELAY = 5000; // 5 seconds
 
     const fetchExchangeRates = async () => {
       if (!mounted) return;
@@ -63,17 +65,21 @@ export function useExchangeRates() {
             if (sbiResponse.ok) {
               const sbiData = await sbiResponse.json();
               if (sbiData.success && sbiData.data && sbiData.data.length > 0) {
-                sbiRate = parseFloat(sbiData.data[0].sbi_tt_sell);
+                const parsedRate = parseFloat(sbiData.data[0].sbi_tt_sell);
                 
-                // Store in shared state for other components
-                if (sharedRates) {
-                  sharedRates.SBI = sbiRate;
-                  if (sharedRates.lastUpdated === null) {
-                    sharedRates.lastUpdated = new Date().toISOString();
+                if (!isNaN(parsedRate) && parsedRate > 0) {
+                  sbiRate = parsedRate;
+                  
+                  // Store in shared state for other components
+                  if (sharedRates) {
+                    sharedRates.SBI = sbiRate;
+                    if (sharedRates.lastUpdated === null) {
+                      sharedRates.lastUpdated = new Date().toISOString();
+                    }
                   }
+                  
+                  dataSource = 'api';
                 }
-                
-                dataSource = 'api';
               }
             }
           } catch (sbiError) {
@@ -88,17 +94,21 @@ export function useExchangeRates() {
             if (rbiResponse.ok) {
               const rbiData = await rbiResponse.json();
               if (rbiData.success && rbiData.data && rbiData.data.length > 0) {
-                rbiRate = parseFloat(rbiData.data[0].rate);
+                const parsedRate = parseFloat(rbiData.data[0].rate);
                 
-                // Store in shared state for other components
-                if (sharedRates) {
-                  sharedRates.RBI = rbiRate;
-                  if (sharedRates.lastUpdated === null) {
-                    sharedRates.lastUpdated = new Date().toISOString();
+                if (!isNaN(parsedRate) && parsedRate > 0) {
+                  rbiRate = parsedRate;
+                  
+                  // Store in shared state for other components
+                  if (sharedRates) {
+                    sharedRates.RBI = rbiRate;
+                    if (sharedRates.lastUpdated === null) {
+                      sharedRates.lastUpdated = new Date().toISOString();
+                    }
                   }
+                  
+                  dataSource = 'api';
                 }
-                
-                dataSource = 'api';
               }
             }
           } catch (rbiError) {
@@ -107,11 +117,14 @@ export function useExchangeRates() {
           }
         }
         
-        setRatesData({
-          RBI: rbiRate,
-          SBI: sbiRate,
-          lastUpdated: new Date().toISOString()
-        });
+        // Only update state if we have valid rates
+        if (rbiRate > 0 && sbiRate > 0) {
+          setRatesData({
+            RBI: rbiRate,
+            SBI: sbiRate,
+            lastUpdated: new Date().toISOString()
+          });
+        }
         
         console.log(`Exchange rates loaded from ${dataSource}. RBI: ${rbiRate}, SBI: ${sbiRate}`);
         setLoading(false);
@@ -120,7 +133,17 @@ export function useExchangeRates() {
         console.error('Error fetching exchange rates:', err);
         setError('Failed to fetch live exchange rates');
         setLoading(false);
-        // Keep using the default or last known values
+        
+        // Keep using the default or last known values if they're valid
+        if (ratesData.RBI <= 0 || ratesData.SBI <= 0) {
+          setRatesData({
+            RBI: 84.4063, // Default fallback value
+            SBI: 84.6500, // Default fallback value
+            lastUpdated: new Date().toISOString()
+          });
+        }
+        
+        retryTimeout = setTimeout(fetchExchangeRates, RETRY_DELAY);
       }
     };
 
@@ -130,6 +153,7 @@ export function useExchangeRates() {
     return () => {
       mounted = false;
       clearInterval(updateInterval);
+      clearTimeout(retryTimeout);
     };
   }, []);
 

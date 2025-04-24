@@ -38,15 +38,25 @@ if (typeof window !== 'undefined' && !window.hasOwnProperty('sharedMCXPrice')) {
 
 // Helper function to parse the rate change string
 function parseRateChangeString(rateChangeStr: string): { change: number; changePercent: number } {
-  const changeMatch = rateChangeStr.match(/^([-+]?\d+\.?\d*)\s*\(([-+]?\d+\.?\d*)%\)$/);
-  return {
-    change: changeMatch ? parseFloat(changeMatch[1]) : 0,
-    changePercent: changeMatch ? parseFloat(changeMatch[2]) : 0
-  };
+  try {
+    const changeMatch = rateChangeStr.match(/^([-+]?\d+\.?\d*)\s*\(([-+]?\d+\.?\d*)%\)$/);
+    return {
+      change: changeMatch ? parseFloat(changeMatch[1]) : 0,
+      changePercent: changeMatch ? parseFloat(changeMatch[2]) : 0
+    };
+  } catch (error) {
+    console.error('Error parsing rate change string:', error);
+    return { change: 0, changePercent: 0 };
+  }
 }
 
 export function useMCXPrice() {
-  const [priceData, setPriceData] = useState<MCXPriceData | null>(null);
+  const [priceData, setPriceData] = useState<MCXPriceData>({
+    currentPrice: 243.75, // Default fallback value
+    lastUpdated: new Date().toISOString(),
+    change: 0,
+    changePercent: 0
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,6 +96,7 @@ export function useMCXPrice() {
             changePercent: sharedMCXPrice.changePercent
           });
           setError(null);
+          setLoading(false);
           return;
         }
         
@@ -123,6 +134,7 @@ export function useMCXPrice() {
               
               setPriceData(newPriceData);
               setError(null);
+              setLoading(false);
               console.log('MCX price fetched from API:', newPriceData);
               return;
             }
@@ -143,34 +155,43 @@ export function useMCXPrice() {
             
             if (result.success && result.data?.length > 0) {
               const rawData = result.data[0];
-              const newPriceData = {
-                currentPrice: parseFloat(rawData.month1Price),
-                lastUpdated: rawData.timestamp,
-                change: parseFloat(rawData.month1RateVal),
-                changePercent: parseFloat(rawData.month1RatePct)
-              };
               
-              // Update shared state for other components
-              if (sharedMCXPrice) {
-                sharedMCXPrice.currentPrice = newPriceData.currentPrice;
-                sharedMCXPrice.lastUpdated = newPriceData.lastUpdated;
-                sharedMCXPrice.change = newPriceData.change;
-                sharedMCXPrice.changePercent = newPriceData.changePercent;
-                sharedMCXPrice.source = 'database';
+              // Ensure we have valid numbers
+              const currentPrice = parseFloat(rawData.month1Price);
+              const change = parseFloat(rawData.month1RateVal || '0');
+              const changePercent = parseFloat(rawData.month1RatePct || '0');
+              
+              if (!isNaN(currentPrice)) {
+                const newPriceData = {
+                  currentPrice,
+                  lastUpdated: rawData.timestamp || new Date().toISOString(),
+                  change: isNaN(change) ? 0 : change,
+                  changePercent: isNaN(changePercent) ? 0 : changePercent
+                };
+                
+                // Update shared state for other components
+                if (sharedMCXPrice) {
+                  sharedMCXPrice.currentPrice = newPriceData.currentPrice;
+                  sharedMCXPrice.lastUpdated = newPriceData.lastUpdated;
+                  sharedMCXPrice.change = newPriceData.change;
+                  sharedMCXPrice.changePercent = newPriceData.changePercent;
+                  sharedMCXPrice.source = 'database';
+                }
+                
+                setPriceData(newPriceData);
+                setError(null);
+                setLoading(false);
+                console.log('MCX price fetched from database:', newPriceData);
+                return;
               }
-              
-              setPriceData(newPriceData);
-              setError(null);
-              console.log('MCX price fetched from database:', newPriceData);
-              return;
             }
           }
         } catch (dbError) {
           console.error('Error fetching from MCX database:', dbError);
         }
         
-        // Step 4: Use fallback values if all else fails
-        if (!priceData) {
+        // Step 4: Keep using existing data if it exists, otherwise use fallback
+        if (!priceData.currentPrice) {
           const fallbackData = {
             currentPrice: 243.75,
             lastUpdated: new Date().toISOString(),
@@ -185,6 +206,17 @@ export function useMCXPrice() {
       } catch (err) {
         console.error('Error in MCX price fetching:', err);
         setError('Failed to load MCX data');
+        
+        // Keep using existing data or fallback
+        if (!priceData.currentPrice) {
+          setPriceData({
+            currentPrice: 243.75,
+            lastUpdated: new Date().toISOString(),
+            change: 0,
+            changePercent: 0
+          });
+        }
+        
         retryTimeout = setTimeout(fetchData, RETRY_DELAY);
       } finally {
         if (mounted) {
