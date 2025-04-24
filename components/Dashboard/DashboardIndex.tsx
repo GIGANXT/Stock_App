@@ -13,11 +13,19 @@ import { format } from "date-fns";
 // Static data for LME Cash Settlement cards
 const lmeHistoricalData = [
   {
+    basePrice: 2,384.00,
+    spread: 28.5,
+    spreadPercent: "", // No longer displayed in the UI as per requirements
+    spreadINR: "3228.52",
+    isIncrease: true,
+    formattedDate: "23. April 2025"
+  },
+  {
     basePrice: 2355.50,
     spread: 28,
     spreadPercent: "1.50", // No longer displayed in the UI as per requirements
     spreadINR: "1288.88",
-    isIncrease: true,
+    isIncrease: false,
     formattedDate: "22. April 2025"
   },
   {
@@ -27,14 +35,6 @@ const lmeHistoricalData = [
     spreadINR: "605.3547",
     isIncrease: false,
     formattedDate: "17. April 2025"
-  },
-  {
-    basePrice: 2332.50,
-    spread: -1,
-    spreadPercent: "0.96", // No longer displayed in the UI as per requirements
-    spreadINR: "188.554",
-    isIncrease: false,
-    formattedDate: "16. April 2025"
   }
 ];
 
