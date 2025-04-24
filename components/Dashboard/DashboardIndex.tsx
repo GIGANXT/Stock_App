@@ -13,7 +13,7 @@ import { format } from "date-fns";
 // Static data for LME Cash Settlement cards
 const lmeHistoricalData = [
   {
-    basePrice: 2,384.00,
+    basePrice: 2384.00,
     spread: 28.5,
     spreadPercent: "", // No longer displayed in the UI as per requirements
     spreadINR: "3228.52",
