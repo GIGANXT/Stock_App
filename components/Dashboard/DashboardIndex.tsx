@@ -208,28 +208,52 @@ const todaysLMEData = {
   delayMinutes: 30
 };
 
+// Define the interface for slider state
+interface SliderState {
+  isAtStart: boolean;
+  isAtEnd: boolean;
+  currentIndex: number;
+}
+
 export default function MarketDashboard() {
   const currentDate = new Date();
   const [showLMEPopup, setShowLMEPopup] = useState(false);
   const sliderRef = useRef<Slider>(null);
-  const [sliderState, setSliderState] = useState({
-    isAtStart: true,
-    isAtEnd: false
-  });
+  const gestureCleanup = useRef<GestureCleanup | null>(null);
   const [expandedMobileView, setExpandedMobileView] = useState(false);
+  const [sliderState, setSliderState] = useState<SliderState>({
+    isAtStart: true,
+    isAtEnd: false,
+    currentIndex: 0
+  });
   
-  const updateSliderState = () => {
-    if (sliderRef.current?.innerSlider) {
-      const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
-      const { currentSlide, slideCount } = innerSlider.state;
-      const slidesToShow = sliderRef.current.props.slidesToShow || 3;
-      
-      setSliderState({
-        isAtStart: currentSlide === 0,
-        isAtEnd: currentSlide >= slideCount - slidesToShow
-      });
+  // Track and update the current slider state for UI enhancements
+  const updateSliderState = useCallback(() => {
+    // Safely access the slider state
+    if (!sliderRef.current?.innerSlider) return;
+    
+    const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
+    const { currentSlide, slideCount } = innerSlider.state;
+    const slidesToShow = sliderRef.current.props.slidesToShow || 3;
+    
+    // Determine if we're at the start or end
+    const isAtStart = currentSlide === 0;
+    const isAtEnd = currentSlide >= slideCount - slidesToShow;
+    
+    // Update our tracking state
+    setSliderState({
+      isAtStart,
+      isAtEnd,
+      currentIndex: currentSlide
+    });
+    
+    // Apply or remove class to the slider element as needed
+    const sliderElement = document.querySelector('.lme-slider');
+    if (sliderElement) {
+      sliderElement.classList.toggle('at-start', isAtStart);
+      sliderElement.classList.toggle('at-end', isAtEnd);
     }
-  };
+  }, []);
   
   // Update slider state when window is resized
   useEffect(() => {
@@ -247,7 +271,7 @@ export default function MarketDashboard() {
       window.removeEventListener('resize', handleResize);
       clearTimeout(initialTimer);
     };
-  }, []);
+  }, [updateSliderState]);
 
   // After slider initialization and after every change
   const handleAfterChange = () => {
@@ -258,7 +282,7 @@ export default function MarketDashboard() {
   useEffect(() => {
     const timer = setTimeout(updateSliderState, 300);
     return () => clearTimeout(timer);
-  }, []);
+  }, [updateSliderState]);
 
   // Block direct DOM manipulation at edges
   useEffect(() => {
@@ -300,7 +324,7 @@ export default function MarketDashboard() {
     
     const observer = blockEdgeSliding();
     return () => observer?.disconnect();
-  }, []);
+  }, [updateSliderState]);
 
   // Handle wheel (trackpad gesture) scrolling with strict bounds checking
   const setupTrackpadGestures = useCallback(() => {
@@ -351,7 +375,7 @@ export default function MarketDashboard() {
       element: sliderElement, 
       handler: wheelHandler
     };
-  }, []);
+  }, [updateSliderState]);
 
   // Handle ESC key to close popup - using useCallback for better performance
   const closePopup = useCallback(() => {
@@ -454,7 +478,7 @@ export default function MarketDashboard() {
       window.removeEventListener('keydown', preventKeyboardWrap, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [updateSliderState]);
 
   // Apply custom slider styles
   useEffect(() => {
@@ -466,11 +490,53 @@ export default function MarketDashboard() {
     });
     
     // Call after a short delay to ensure the slider is fully initialized
-    const gestureCleanup = { current: null as GestureCleanup | null };
     setTimeout(() => {
-      const cleanup = setupTrackpadGestures();
-      if (cleanup) {
-        gestureCleanup.current = cleanup;
+      // Set up the trackpad gestures directly here instead of using extra gesture cleanup
+      const sliderElement = document.querySelector('.lme-slider');
+      if (sliderElement) {
+        const wheelHandler = function(this: Element, e: WheelEvent) {
+          // Only handle horizontal scrolls or small vertical scrolls that might be intended as horizontal
+          if (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.5) {
+            e.preventDefault();
+            
+            // Safely access slider state if available
+            if (sliderRef.current?.innerSlider) {
+              const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
+              const { currentSlide, slideCount } = innerSlider.state;
+              const slidesToShow = sliderRef.current.props.slidesToShow || 3;
+              
+              // Get current slider state
+              const isAtStart = currentSlide === 0;
+              const isAtEnd = currentSlide >= slideCount - slidesToShow;
+              
+              // Only handle horizontal scrolling
+              if (e.deltaX > 0) {
+                // Only go next if not at the end
+                if (!isAtEnd) {
+                  sliderRef.current.slickNext();
+                }
+              } else if (e.deltaX < 0) {
+                // Only go prev if not at the beginning
+                if (!isAtStart) {
+                  sliderRef.current.slickPrev();
+                }
+              }
+              
+              // Update state after potential change
+              setTimeout(updateSliderState, 50);
+            }
+          }
+          // Don't prevent default for vertical scrolls - let them pass through
+        };
+        
+        // Track wheel events for horizontal scrolling - now with proper typing
+        sliderElement.addEventListener('wheel', wheelHandler, { passive: false });
+        
+        // Store the handler and element for cleanup
+        gestureCleanup.current = { 
+          element: sliderElement, 
+          handler: wheelHandler
+        };
       }
     }, 500);
 
@@ -489,7 +555,7 @@ export default function MarketDashboard() {
         element.removeEventListener('wheel', handler);
       }
     };
-  }, [setupTrackpadGestures]);
+  }, [updateSliderState, setupTrackpadGestures]);
 
   // Enhanced scroll to specific card with better visual feedback
   const scrollToCard = (index: number) => {
