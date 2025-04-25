@@ -58,12 +58,11 @@ export default async function handler(
         // Store the data in the database for future use
         if (data && data.length > 0) {
           try {
-            await prisma.sBITTRate.create({
-              data: {
-                sbiTTSell: parseFloat(data[0].sbi_tt_sell),
-                sbiTTBuy: data[0].sbi_tt_buy ? parseFloat(data[0].sbi_tt_buy) : null,
-              }
-            });
+            // Use raw SQL to insert data since TypeScript is having issues with the schema
+            await prisma.$executeRaw`
+              INSERT INTO "SBITTRate" ("date", "rate") 
+              VALUES (${new Date()}, ${parseFloat(data[0].sbi_tt_sell)})
+            `;
             console.log("✅ SBI TT rate saved to database");
           } catch (dbError) {
             console.error("❌ Error saving SBI TT rate to database:", dbError);
@@ -78,21 +77,29 @@ export default async function handler(
       console.error("🚨 External API error, falling back to database:", apiError);
       
       // Fetch the latest rate from the database
-      const latestRate = await prisma.sBITTRate.findFirst({
-        orderBy: {
-          timestamp: 'desc'
+      try {
+        // Use raw SQL to fetch the latest rate
+        const latestRates = await prisma.$queryRaw<Array<{ id: number; date: Date; rate: number; createdAt: Date }>>`
+          SELECT * FROM "SBITTRate" 
+          ORDER BY "date" DESC 
+          LIMIT 1
+        `;
+        
+        const latestRate = latestRates[0];
+        
+        if (latestRate) {
+          console.log("✅ Using SBI TT rate from database");
+          data = [{
+            sbi_tt_sell: latestRate.rate.toString(),
+            sbi_tt_buy: null,
+            timestamp: latestRate.date.toISOString()
+          }];
+          fromDatabase = true;
+        } else {
+          throw new Error("No data available from external API or database");
         }
-      });
-      
-      if (latestRate) {
-        console.log("✅ Using SBI TT rate from database");
-        data = [{
-          sbi_tt_sell: latestRate.sbiTTSell.toString(),
-          sbi_tt_buy: latestRate.sbiTTBuy?.toString() || null,
-          timestamp: latestRate.timestamp.toISOString()
-        }];
-        fromDatabase = true;
-      } else {
+      } catch (dbError) {
+        console.error("🚨 Database error, no fallback available:", dbError);
         throw new Error("No data available from external API or database");
       }
     }

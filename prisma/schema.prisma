@@ -171,12 +171,32 @@ model LME_3_MetalPrice {
 
 model SBITTRate {
   id        Int      @id @default(autoincrement())
-  date      DateTime @default(now())
-  sbiTTSell Float
-  sbiTTBuy  Float?
-  timestamp DateTime @default(now())
+  date      DateTime @unique
+  rate      Float
   createdAt DateTime @default(now())
-
-  @@index([timestamp])
 }
 
+
+model RBI_Rate {
+  id        Int      @id @default(autoincrement())
+  date      String @unique
+  rate      Float
+  createdAt DateTime @default(now())
+}
+
+model LMECashSettlement {
+  id             Int      @id @default(autoincrement())
+  date           String @unique
+  price          Float
+  Dollar_Difference Float
+  INR_Difference  Float
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model LME_West_Metal_Price {
+  id             Int      @id @default(autoincrement())
+  date           String       @unique
+  Price          Float
+  createdAt      DateTime @default(now())
+}
