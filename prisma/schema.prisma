@@ -171,10 +171,12 @@ model LME_3_MetalPrice {
 
 model SBITTRate {
   id        Int      @id @default(autoincrement())
-  date      DateTime
-  rate      Float
+  date      DateTime @default(now())
+  sbiTTSell Float
+  sbiTTBuy  Float?
+  timestamp DateTime @default(now())
   createdAt DateTime @default(now())
 
-  @@index([date])
+  @@index([timestamp])
 }
 

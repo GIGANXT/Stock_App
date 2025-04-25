@@ -60,8 +60,8 @@ export default async function handler(
           try {
             await prisma.sBITTRate.create({
               data: {
-                date: new Date(),
-                rate: parseFloat(data[0].sbi_tt_sell),
+                sbiTTSell: parseFloat(data[0].sbi_tt_sell),
+                sbiTTBuy: data[0].sbi_tt_buy ? parseFloat(data[0].sbi_tt_buy) : null,
               }
             });
             console.log("✅ SBI TT rate saved to database");
@@ -80,16 +80,16 @@ export default async function handler(
       // Fetch the latest rate from the database
       const latestRate = await prisma.sBITTRate.findFirst({
         orderBy: {
-          date: 'desc'
+          timestamp: 'desc'
         }
       });
       
       if (latestRate) {
         console.log("✅ Using SBI TT rate from database");
         data = [{
-          sbi_tt_sell: latestRate.rate.toString(),
-          sbi_tt_buy: null, // We don't store buy rate in the updated schema
-          timestamp: latestRate.date.toISOString()
+          sbi_tt_sell: latestRate.sbiTTSell.toString(),
+          sbi_tt_buy: latestRate.sbiTTBuy?.toString() || null,
+          timestamp: latestRate.timestamp.toISOString()
         }];
         fromDatabase = true;
       } else {

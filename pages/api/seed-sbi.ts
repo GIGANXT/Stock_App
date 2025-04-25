@@ -18,8 +18,8 @@ export default async function handler(
     // Insert a test record with proper decimal handling
     const result = await prisma.sBITTRate.create({
       data: {
-        date: new Date(),
-        rate: 83.2500,
+        sbiTTSell: 83.2500,
+        sbiTTBuy: 81.7500,
       }
     });
 
