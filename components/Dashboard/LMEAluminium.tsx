@@ -229,9 +229,6 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
           <div className="flex items-center gap-2">
             <div className="relative">
               <BarChart2 className="w-4 h-4 text-blue-600" />
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full">
-                <div className="absolute inset-0 bg-green-500 rounded-full animate-ping" />
-              </div>
             </div>
             <h2 className="text-base font-bold text-blue-600">Spot Price</h2>
           </div>

@@ -84,16 +84,16 @@ export default function LiveSpotCard({
     const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
 
     return (
-        <div className="price-card bg-white rounded-xl p-4 border border-gray-200 
-          shadow-md hover:shadow-lg transition-all duration-200 w-full max-w-xs
-          relative overflow-hidden gpu-render group min-h-[162px]">
+        <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+          shadow-sm hover:shadow-md transition-all duration-200 w-full
+          relative overflow-hidden gpu-render group min-h-[130px] md:min-h-[162px]">
             
             {/* Background effect - properly layered */}
             <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
               ${isIncrease ? 'bg-green-500' : 'bg-red-500'} 
               -z-10`}></div>
 
-            <div className="relative flex flex-col h-full gap-2">
+            <div className="relative flex flex-col h-full gap-1 md:gap-2">
                 {/* Live Indicator Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export default function LiveSpotCard({
 
                 {/* Price Content */}
                 <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center justify-between mb-1 md:mb-1.5">
                         <div className="text-sm text-gray-600 crisp-text">
                             {format(displayTime, 'dd. MMMM yyyy')}
                         </div>
@@ -120,35 +120,33 @@ export default function LiveSpotCard({
                     </div>
 
                     {loading ? (
-                        <div className="py-2">
-                            <div className="h-6 w-32 bg-gray-200 animate-pulse mb-2 rounded"></div>
-                            <div className="h-6 w-36 bg-gray-200 animate-pulse rounded"></div>
+                        <div className="py-1 md:py-2">
+                            <div className="h-5 md:h-6 w-28 md:w-32 bg-gray-200 animate-pulse mb-2 rounded"></div>
+                            <div className="h-5 md:h-6 w-32 md:w-36 bg-gray-200 animate-pulse rounded"></div>
                         </div>
                     ) : error ? (
                         <div>
-                            <div className="h-8 w-32 mb-2">
+                            <div className="h-6 w-32 mb-1 md:mb-2">
                                 <p className="text-sm text-red-500">{error}</p>
                                 <p className="text-xs text-gray-500">Using default values</p>
                             </div>
                             <div className="flex items-baseline gap-2">
-                                <span className="font-mono text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 
-                                  bg-clip-text text-transparent gradient-text crisp-text">
+                                <span className="font-mono text-xl md:text-2xl font-bold text-indigo-600">
                                     ${currentSpotPrice.toFixed(2)}
                                 </span>
-                                <span className="text-sm text-gray-600 crisp-text">{unit}</span>
+                                <span className="text-xs text-gray-500">{unit}</span>
                             </div>
                         </div>
                     ) : (
                         <>
                             <div className="flex items-baseline gap-2">
-                                <span className="font-mono text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 
-                                  bg-clip-text text-transparent gradient-text crisp-text">
+                                <span className="font-mono text-xl md:text-2xl font-bold text-indigo-600">
                                     ${currentSpotPrice.toFixed(2)}
                                 </span>
-                                <span className="text-sm text-gray-600 crisp-text">{unit}</span>
+                                <span className="text-xs text-gray-500">{unit}</span>
                             </div>
 
-                            <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-2 font-medium`}>
+                            <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-1.5 md:mt-2 font-medium`}>
                                 <TrendIcon className="w-4 h-4 flex-shrink-0 crisp-text" />
                                 <span className="whitespace-nowrap crisp-text">
                                     {isIncrease ? '+' : ''}{currentChangePercent.toFixed(2)}%

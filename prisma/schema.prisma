@@ -170,12 +170,11 @@ model LME_3_MetalPrice {
 }
 
 model SBITTRate {
-  id           String   @id @default(uuid())
-  sbiTTSell    Decimal  @db.Decimal(10, 4)
-  sbiTTBuy     Decimal? @db.Decimal(10, 4)
-  timestamp    DateTime @default(now())
-  createdAt    DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  rate      Float
+  createdAt DateTime @default(now())
 
-  @@index([timestamp])
+  @@index([date])
 }
 

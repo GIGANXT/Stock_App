@@ -13,6 +13,19 @@ import { format } from "date-fns";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
+// Declare global window interface extension
+declare global {
+  interface Window {
+    sharedMCXPrice: {
+      currentPrice: number | null;
+      lastUpdated: string | null;
+      change: number | null;
+      changePercent: number | null;
+      source: string | null;
+    };
+  }
+}
+
 // Update shared MCX price data in the window object
 const updateSharedMCXPrice = (
   price: number, 
@@ -21,21 +34,13 @@ const updateSharedMCXPrice = (
   changePercent: number
 ) => {
   if (typeof window !== 'undefined' && window.hasOwnProperty('sharedMCXPrice')) {
-    const sharedMCXPrice = window.sharedMCXPrice as { 
-      currentPrice: number | null; 
-      lastUpdated: string | null; 
-      change: number | null; 
-      changePercent: number | null;
-      source: string | null;
-    };
+    window.sharedMCXPrice.currentPrice = price;
+    window.sharedMCXPrice.lastUpdated = lastUpdated;
+    window.sharedMCXPrice.change = change;
+    window.sharedMCXPrice.changePercent = changePercent;
+    window.sharedMCXPrice.source = 'dashboard';
     
-    sharedMCXPrice.currentPrice = price;
-    sharedMCXPrice.lastUpdated = lastUpdated;
-    sharedMCXPrice.change = change;
-    sharedMCXPrice.changePercent = changePercent;
-    sharedMCXPrice.source = 'dashboard';
-    
-    console.log('Updated shared MCX price data:', sharedMCXPrice);
+    console.log('Updated shared MCX price data:', window.sharedMCXPrice);
   }
 };
 
@@ -453,105 +458,113 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
   }
 
   return (
-    <>
-      {/* Compact Card View */}
-      <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm min-h-[190px] flex flex-col justify-between">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-blue-600 flex items-center gap-1">
-            <BarChart2 className="w-3.5 h-3.5 text-purple-600" />
-            MCX Aluminium
-          </h2>
-          <div className="flex items-center gap-1.5">
-            <MCXClock />
-            <button
-              onClick={fetchData}
-              className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
-            </button>
-            <button
-              onClick={() => addExpandedComponent('MCXAluminium')}
-              className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
-            >
-              <Maximize2 className="w-3 h-3" />
-            </button>
+    <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-200 min-h-[190px] relative">
+      <div className="flex items-center justify-between mb-1 relative z-10">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <BarChart2 className="w-4 h-4 text-blue-600" />
           </div>
-        </div>
-
-        <div className="flex flex-col flex-1 py-1.5">
-          {/* Mobile: Vertical layout */}
-          <div className="sm:hidden flex flex-col space-y-2.5 mb-2">
-            <ContractPrice
-              label={data.month1Label}
-              price={data.month1Price}
-              rateVal={data.month1RateVal}
-              ratePct={data.month1RatePct}
-              gradient="from-blue-600 to-purple-600"
-              showDivider={false}
-            />
-            <ContractPrice
-              label={data.month2Label}
-              price={data.month2Price}
-              rateVal={data.month2RateVal}
-              ratePct={data.month2RatePct}
-              gradient="from-purple-600 to-pink-600"
-              showDivider={false}
-            />
-            <ContractPrice
-              label={data.month3Label}
-              price={data.month3Price}
-              rateVal={data.month3RateVal}
-              ratePct={data.month3RatePct}
-              gradient="from-pink-600 to-rose-600"
-              showDivider={false}
-            />
-          </div>
-
-          {/* Desktop: Horizontal layout */}
-          <div className="hidden sm:flex items-center my-2">
-            <ContractPrice
-              label={data.month1Label}
-              price={data.month1Price}
-              rateVal={data.month1RateVal}
-              ratePct={data.month1RatePct}
-              gradient="from-blue-600 to-purple-600"
-            />
-            <ContractPrice
-              label={data.month2Label}
-              price={data.month2Price}
-              rateVal={data.month2RateVal}
-              ratePct={data.month2RatePct}
-              gradient="from-purple-600 to-pink-600"
-            />
-            <ContractPrice
-              label={data.month3Label}
-              price={data.month3Price}
-              rateVal={data.month3RateVal}
-              ratePct={data.month3RatePct}
-              gradient="from-pink-600 to-rose-600"
-              showDivider={false}
-            />
-          </div>
-
-          {/* Contango section */}
-          <div className={`text-center py-1 px-2 mt-auto rounded ${
-            isContango
-              ? "bg-green-100 border border-green-200 text-green-800"
-              : "bg-red-100 border border-red-200 text-red-800"
-          }`}>
-            <div className="flex items-center justify-center gap-1.5 text-xs">
-              <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
-              <span>₹{Math.abs(spread).toFixed(2)}</span>
-              {isContango ? 
-                <TrendingUp className="w-3 h-3" /> : 
-                <TrendingDown className="w-3 h-3" />
-              }
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-blue-600">MCX Aluminium</h2>
+            <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 font-semibold leading-none">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+              <span>LIVE</span>
             </div>
           </div>
         </div>
+        <div className="flex items-center gap-1.5">
+          <MCXClock />
+          <button
+            onClick={fetchData}
+            className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            onClick={() => addExpandedComponent('MCXAluminium')}
+            className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
+          >
+            <Maximize2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
-    </>
+
+      <div className="flex flex-col flex-1 py-1.5">
+        {/* Mobile: Vertical layout */}
+        <div className="sm:hidden flex flex-col space-y-2.5 mb-2">
+          <ContractPrice
+            label={data.month1Label}
+            price={data.month1Price}
+            rateVal={data.month1RateVal}
+            ratePct={data.month1RatePct}
+            gradient="from-blue-600 to-purple-600"
+            showDivider={false}
+          />
+          <ContractPrice
+            label={data.month2Label}
+            price={data.month2Price}
+            rateVal={data.month2RateVal}
+            ratePct={data.month2RatePct}
+            gradient="from-purple-600 to-pink-600"
+            showDivider={false}
+          />
+          <ContractPrice
+            label={data.month3Label}
+            price={data.month3Price}
+            rateVal={data.month3RateVal}
+            ratePct={data.month3RatePct}
+            gradient="from-pink-600 to-rose-600"
+            showDivider={false}
+          />
+        </div>
+
+        {/* Desktop: Horizontal layout */}
+        <div className="hidden sm:flex items-center my-2">
+          <ContractPrice
+            label={data.month1Label}
+            price={data.month1Price}
+            rateVal={data.month1RateVal}
+            ratePct={data.month1RatePct}
+            gradient="from-blue-600 to-purple-600"
+          />
+          <ContractPrice
+            label={data.month2Label}
+            price={data.month2Price}
+            rateVal={data.month2RateVal}
+            ratePct={data.month2RatePct}
+            gradient="from-purple-600 to-pink-600"
+          />
+          <ContractPrice
+            label={data.month3Label}
+            price={data.month3Price}
+            rateVal={data.month3RateVal}
+            ratePct={data.month3RatePct}
+            gradient="from-pink-600 to-rose-600"
+            showDivider={false}
+          />
+        </div>
+
+        {/* Add extra space before contango section */}
+        <div className="py-1.5"></div>
+
+        {/* Contango section */}
+        <div className={`text-center py-1 px-2 mt-auto rounded ${
+          isContango
+            ? "bg-green-100 border border-green-200 text-green-800"
+            : "bg-red-100 border border-red-200 text-red-800"
+        }`}>
+          <div className="flex items-center justify-center gap-1.5 text-xs">
+            <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
+            <span>₹{Math.abs(spread).toFixed(2)}</span>
+            {isContango ? 
+              <TrendingUp className="w-3 h-3" /> : 
+              <TrendingDown className="w-3 h-3" />
+            }
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
