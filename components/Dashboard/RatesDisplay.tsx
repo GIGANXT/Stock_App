@@ -211,7 +211,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-4">
             <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
               <div className="flex items-center gap-2 mb-3">
                 <Banknote className="w-4 h-4 text-blue-600" />
@@ -251,19 +251,37 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
             </div>
           </div>
 
+          <div className="border-t border-gray-200 pt-3 mb-4">
+            <div className="flex items-center gap-1.5 text-blue-700 mb-2">
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <h3 className="text-sm font-medium">Market Insight</h3>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600">
+                RBI Reference Rate: Official rate published daily at 12:30 PM IST, used as a benchmark for financial transactions and foreign trade.
+              </p>
+              
+              <p className="text-xs text-gray-600">
+                SBI TT Rate: The commercial rate that includes bank margins and processing costs. Used for telegraphic transfers and remittances.
+              </p>
+              
+              <p className="text-xs text-gray-600">
+                Margin: ₹{(sbiRate && rbiRate) ? (sbiRate - rbiRate).toFixed(4) : "..."} | This spread typically widens during market volatility and narrows in stable periods.
+              </p>
+            </div>
+          </div>
+
           <div className="border-t border-gray-200 pt-3">
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <div className="flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
                 <span>Last updated: {format(lastUpdated, "HH:mm:ss, dd MMM")}</span>
               </div>
-              <button
-                onClick={handleRefresh}
-                className="text-xs text-blue-600 flex items-center gap-1 hover:text-blue-800"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-                Refresh
-              </button>
+              {error && !error.includes("cached") && (
+                <div className="text-xs text-red-600 flex items-center gap-1">
+                  {error}
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -371,15 +389,72 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
               </div>
             )}
           </div>
-          <button
-            onClick={handleRefresh}
-            className="text-xs text-blue-600 flex items-center gap-1 hover:text-blue-800"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-gray-500">
+              {format(lastUpdated, "HH:mm:ss")}
+            </div>
+            <button
+              onClick={handleRefresh}
+              className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-gray-600 ${isRefreshing ? "animate-spin" : ""}`} />
+            </button>
+          </div>
         </div>
-        {renderExpandedContent()}
+        {isLoading ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-4">
+              {/* RBI Rate skeleton */}
+              <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <Banknote className="w-4 h-4 text-blue-600" />
+                  <div className="h-5 w-32 bg-gray-200 animate-pulse rounded"></div>
+                </div>
+                <div className="flex items-baseline gap-2 mb-1">
+                  <div className="h-9 w-32 bg-gray-200 animate-pulse rounded"></div>
+                  <div className="h-5 w-12 bg-gray-200 animate-pulse rounded"></div>
+                </div>
+                <div className="h-4 w-44 bg-gray-200 animate-pulse rounded mt-2"></div>
+              </div>
+
+              {/* SBI Rate skeleton */}
+              <div className="bg-purple-50/50 p-4 rounded-lg border border-purple-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <Banknote className="w-4 h-4 text-purple-600" />
+                  <div className="h-5 w-32 bg-gray-200 animate-pulse rounded"></div>
+                </div>
+                <div className="flex items-baseline gap-2 mb-1">
+                  <div className="h-9 w-32 bg-gray-200 animate-pulse rounded"></div>
+                  <div className="h-5 w-12 bg-gray-200 animate-pulse rounded"></div>
+                </div>
+                <div className="h-4 w-44 bg-gray-200 animate-pulse rounded mt-2"></div>
+              </div>
+            </div>
+
+            {/* Market Insight skeleton */}
+            <div className="border-t border-gray-200 pt-3 mb-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <ArrowUpRight className="w-3.5 h-3.5 text-blue-600" />
+                <div className="h-5 w-28 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="h-3 w-full bg-gray-200 animate-pulse rounded"></div>
+                <div className="h-3 w-full bg-gray-200 animate-pulse rounded"></div>
+                <div className="h-3 w-3/4 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+            </div>
+
+            {/* Footer skeleton */}
+            <div className="border-t border-gray-200 pt-3">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-40 bg-gray-200 animate-pulse rounded"></div>
+              </div>
+            </div>
+          </>
+        ) : (
+          renderExpandedContent()
+        )}
       </ExpandedModalWrapper>
     );
   }

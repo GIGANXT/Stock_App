@@ -365,7 +365,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             rateVal: data.month1RateVal,
             ratePct: data.month1RatePct,
             colorClass: "bg-blue-50 border-blue-100",
-            textClass: "text-blue-800"
+            textClass: "text-blue-800",
+            gradient: "from-blue-600 to-purple-600"
           },
           {
             label: data.month2Label,
@@ -373,7 +374,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             rateVal: data.month2RateVal,
             ratePct: data.month2RatePct,
             colorClass: "bg-purple-50 border-purple-100",
-            textClass: "text-purple-800"
+            textClass: "text-purple-800",
+            gradient: "from-purple-600 to-pink-600"
           },
           {
             label: data.month3Label,
@@ -381,7 +383,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             rateVal: data.month3RateVal,
             ratePct: data.month3RatePct,
             colorClass: "bg-pink-50 border-pink-100",
-            textClass: "text-pink-800"
+            textClass: "text-pink-800",
+            gradient: "from-pink-600 to-rose-600"
           }
         ].map((item, index) => (
           <div key={index} className={`${item.colorClass} rounded-lg p-3 border`}>
@@ -389,7 +392,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
               <Calendar className="w-3 h-3" />
               <h3 className={`text-xs font-medium ${item.textClass}`}>{item.label}</h3>
             </div>
-            <div className="font-mono font-bold text-3xl">₹{item.price.toFixed(2)}</div>
+            <div className={`font-mono font-bold text-3xl bg-gradient-to-r ${item.gradient} bg-clip-text text-transparent`}>₹{item.price.toFixed(2)}</div>
             <div className={`flex items-center gap-1 mt-1 ${item.ratePct >= 0 ? "text-green-600" : "text-red-600"}`}>
               {item.ratePct >= 0 ? 
                 <TrendingUp className="w-3 h-3" /> : 

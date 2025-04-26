@@ -11,6 +11,7 @@ interface LiveSpotPriceCardProps {
 }
 
 export default function LiveSpotPriceCard({
+  priceName = "",
   basePrice = 2650,
   spread = 40,
   spreadINR = '3350.00',
@@ -34,6 +35,13 @@ export default function LiveSpotPriceCard({
       
       {/* Text container with forced GPU layer */}
       <div className="relative transform-gpu flex flex-col h-full gap-1 md:gap-1.5"> 
+        {/* Title - Only display if priceName is provided */}
+        {priceName && (
+          <div className="text-sm text-indigo-700 font-semibold mb-1 line-clamp-1">
+            {priceName}
+          </div>
+        )}
+        
         {/* Date with day indicator */}
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-600 font-medium antialiased subpixel-antialiased flex items-center gap-1.5">

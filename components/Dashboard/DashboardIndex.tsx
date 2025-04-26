@@ -124,79 +124,32 @@ const sliderStyles = {
   },
 };
 
-// Static data for LME Cash Settlement cards
-const lmeHistoricalData = [
-  {
-    basePrice: 2384.00,
-    spread: 28.50,
-    spreadINR: "3228.52",
-    isIncrease: true,
-    formattedDate: "23. April 2025"
-  },
-  {
-    basePrice: 2355.50,
-    spread: 28.00,
-    spreadINR: "1288.88",
-    isIncrease: false,
-    formattedDate: "22. April 2025"
-  },
-  {
-    basePrice: 2327.50,
-    spread: 5.00,
-    spreadINR: "605.35",
-    isIncrease: false,
-    formattedDate: "17. April 2025"
-  },
-  {
-    basePrice: 2332.50,
-    spread: 37.5,
-    spreadINR: "436975",
-    isIncrease: true,
-    formattedDate: "16. April 2025"
-  },
-  {
-    basePrice: 2333.50,
-    spread: 41.5,
-    spreadINR: "439325",
-    isIncrease: true,
-    formattedDate: "15. April 2025"
-  },
-  {
-    basePrice: 2355.50,
-    spread: 43.5,
-    spreadINR: "440150",
-    isIncrease: true,
-    formattedDate: "14. April 2025"
-  },
-  {
-    basePrice: 2364.00,
-    spread: 41.0,
-    spreadINR: "442225",
-    isIncrease: true,
-    formattedDate: "11. April 2025"
-  },
-  {
-    basePrice: 2343.50,
-    spread: 44.5,
-    spreadINR: "446325",
-    isIncrease: true,
-    formattedDate: "10. April 2025"
-  },
-  {
-    basePrice: 2285.00,
-    spread: 42.0,
-    spreadINR: "449500",
-    isIncrease: true,
-    formattedDate: "09. April 2025"
-  },
-  {
-    basePrice: 2366.00,
-    spread: 39.0,
-    spreadINR: "452525",
-    isIncrease: true,
-    formattedDate: "08. April 2025"
-  }
-];
+// Define LMECashSettlement data interface
+interface LMECashSettlementData {
+  id: number;
+  date: string;
+  price: number;
+  Dollar_Difference: number;
+  INR_Difference: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// New interface for the cash settlement data from metal-price API
+interface MetalPriceCashSettlement {
+  type: 'cashSettlement';
+  cashSettlement: number;
+  dateTime: string;
+}
+
+// Interface for the normal metal price data
+interface MetalPriceData {
+  type: 'spotPrice';
+  spotPrice: number;
+  change: number;
+  changePercent: number;
+  lastUpdated: string;
+}
 
 // Today's LME data for the popup
 const todaysLMEData = {
@@ -215,10 +168,16 @@ interface SliderState {
   currentIndex: number;
 }
 
+// Define a more complete Slider interface that includes slickSetOption
+interface ExtendedSlider extends Slider {
+  slickSetOption: (option: string, value: any, refresh: boolean) => void;
+}
+
 export default function MarketDashboard() {
   const currentDate = new Date();
   const [showLMEPopup, setShowLMEPopup] = useState(false);
-  const sliderRef = useRef<Slider>(null);
+  const sliderRef = useRef<ExtendedSlider>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const gestureCleanup = useRef<GestureCleanup | null>(null);
   const [expandedMobileView, setExpandedMobileView] = useState(false);
   const [sliderState, setSliderState] = useState<SliderState>({
@@ -226,27 +185,132 @@ export default function MarketDashboard() {
     isAtEnd: false,
     currentIndex: 0
   });
-  
+  const [lmeData, setLmeData] = useState<LMECashSettlementData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [latestLMEData, setLatestLMEData] = useState<LMECashSettlementData | null>(null);
+  const [cashSettlementData, setCashSettlementData] = useState<MetalPriceCashSettlement | null>(null);
+
+  // Fetch Metal Price data which might include cash settlement data
+  useEffect(() => {
+    const fetchMetalPriceData = async () => {
+      try {
+        const response = await fetch('/api/metal-price');
+        if (!response.ok) {
+          throw new Error('Failed to fetch metal price data');
+        }
+
+        const data = await response.json();
+
+        // Check if we received cash settlement data
+        if (data.type === 'cashSettlement') {
+          setCashSettlementData(data as MetalPriceCashSettlement);
+        }
+      } catch (error) {
+        console.error('Error fetching metal price data:', error);
+      }
+    };
+
+    fetchMetalPriceData();
+
+    // Set up polling interval (every 2 minutes)
+    const intervalId = setInterval(fetchMetalPriceData, 2 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Fetch LME Cash Settlement data from the API
+  useEffect(() => {
+    const fetchLMEData = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/lmecashcal');
+        if (!response.ok) {
+          throw new Error('Failed to fetch LME data');
+        }
+
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setLmeData(result.data);
+          // Set the latest LME data for the popup
+          if (result.data.length > 0) {
+            setLatestLMEData(result.data[0]);
+          }
+          
+          // Initialize slider state right after data loads
+          setTimeout(() => {
+            if (sliderRef.current) {
+              // Reset to first slide and update state
+              sliderRef.current.slickGoTo(0);
+              // We can't use updateSliderState here because it's not defined yet
+              // Instead, manually update the state based on current slider state
+              const updateSlider = () => {
+                if (sliderRef.current?.innerSlider) {
+                  const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
+                  const { currentSlide, slideCount } = innerSlider.state;
+                  const slidesToShow = sliderRef.current.props.slidesToShow || 3;
+                  
+                  // Determine if we're at the start or end
+                  const isAtStart = currentSlide === 0;
+                  const isAtEnd = currentSlide + slidesToShow >= slideCount;
+                  
+                  // Update slider state
+                  setSliderState({
+                    isAtStart,
+                    isAtEnd,
+                    currentIndex: currentSlide
+                  });
+                }
+              };
+              
+              updateSlider();
+              setTimeout(updateSlider, 100);
+              setTimeout(updateSlider, 300);
+            }
+          }, 200);
+        }
+      } catch (error) {
+        console.error('Error fetching LME data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLMEData();
+  }, []);
+
+  // Format date from API data (e.g., "2023-05-30" to "30. May 2023")
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const day = date.getDate();
+      const month = date.toLocaleString('en-US', { month: 'long' });
+      const year = date.getFullYear();
+      return `${day}. ${month} ${year}`;
+    } catch (e) {
+      return dateString; // Return original string if parsing fails
+    }
+  };
+
   // Track and update the current slider state for UI enhancements
   const updateSliderState = useCallback(() => {
     // Safely access the slider state
     if (!sliderRef.current?.innerSlider) return;
-    
+
     const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
     const { currentSlide, slideCount } = innerSlider.state;
     const slidesToShow = sliderRef.current.props.slidesToShow || 3;
-    
+
     // Determine if we're at the start or end
     const isAtStart = currentSlide === 0;
-    const isAtEnd = currentSlide >= slideCount - slidesToShow;
-    
-    // Update our tracking state
+    const isAtEnd = currentSlide + slidesToShow >= slideCount;
+
+    // Update slider state
     setSliderState({
       isAtStart,
       isAtEnd,
       currentIndex: currentSlide
     });
-    
+
     // Apply or remove class to the slider element as needed
     const sliderElement = document.querySelector('.lme-slider');
     if (sliderElement) {
@@ -254,21 +318,39 @@ export default function MarketDashboard() {
       sliderElement.classList.toggle('at-end', isAtEnd);
     }
   }, []);
-  
+
   // Update slider state when window is resized
   useEffect(() => {
     const handleResize = () => {
       // Update after a short delay to ensure all measurements are correct
       setTimeout(updateSliderState, 200);
     };
-    
+
     window.addEventListener('resize', handleResize);
-    
-    // Initial update with slight delay to ensure slider is fully rendered
-    const initialTimer = setTimeout(updateSliderState, 300);
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
+    };
+  }, [updateSliderState]);
+
+  // Add a specific effect to ensure navigation buttons work immediately after component mount
+  useEffect(() => {
+    // Wait for the component to fully render
+    const initTimer = setTimeout(() => {
+      updateSliderState();
+
+      // Force a re-update after a brief delay to ensure stability
+      setTimeout(updateSliderState, 500);
+    }, 100);
+
+    return () => clearTimeout(initTimer);
+  }, [updateSliderState]);
+
+  // Initial update with slight delay to ensure slider is fully rendered
+  useEffect(() => {
+    const initialTimer = setTimeout(updateSliderState, 300);
+
+    return () => {
       clearTimeout(initialTimer);
     };
   }, [updateSliderState]);
@@ -278,25 +360,19 @@ export default function MarketDashboard() {
     updateSliderState();
   };
 
-  // Initial setup - check bounds after component is mounted
-  useEffect(() => {
-    const timer = setTimeout(updateSliderState, 300);
-    return () => clearTimeout(timer);
-  }, [updateSliderState]);
-
   // Block direct DOM manipulation at edges
   useEffect(() => {
     const blockEdgeSliding = () => {
       const sliderElement = document.querySelector('.lme-slider');
       if (!sliderElement) return;
-      
+
       const observer = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
           if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
             const slider = mutation.target as HTMLElement;
             const isAtStart = slider.classList.contains('at-start');
             const isAtEnd = slider.classList.contains('at-end');
-            
+
             if (isAtStart) {
               // Block further backward sliding
               const track = slider.querySelector('.slick-track') as HTMLElement;
@@ -305,7 +381,7 @@ export default function MarketDashboard() {
                 if (track) track.style.pointerEvents = '';
               }, 100);
             }
-            
+
             if (isAtEnd) {
               // Block further forward sliding
               const track = slider.querySelector('.slick-track') as HTMLElement;
@@ -317,11 +393,11 @@ export default function MarketDashboard() {
           }
         }
       });
-      
+
       observer.observe(sliderElement, { attributes: true });
       return observer;
     };
-    
+
     const observer = blockEdgeSliding();
     return () => observer?.disconnect();
   }, [updateSliderState]);
@@ -330,49 +406,56 @@ export default function MarketDashboard() {
   const setupTrackpadGestures = useCallback(() => {
     const sliderElement = document.querySelector('.lme-slider');
     if (!sliderElement) return null;
-    
+
     // Handler function that we can reference for removal
-    const wheelHandler = function(this: Element, e: WheelEvent) {
-      // Only handle horizontal scrolls or small vertical scrolls that might be intended as horizontal
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.5) {
-        e.preventDefault();
-        
-        // Safely access slider state if available
-        if (sliderRef.current?.innerSlider) {
-          const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
-          const { currentSlide, slideCount } = innerSlider.state;
-          const slidesToShow = sliderRef.current.props.slidesToShow || 3;
-          
-          // Get current slider state
-          const isAtStart = currentSlide === 0;
-          const isAtEnd = currentSlide >= slideCount - slidesToShow;
-          
-          // Only handle horizontal scrolling
-          if (e.deltaX > 0) {
-            // Only go next if not at the end
-            if (!isAtEnd) {
-              sliderRef.current.slickNext();
-            }
-          } else if (e.deltaX < 0) {
-            // Only go prev if not at the beginning
-            if (!isAtStart) {
-              sliderRef.current.slickPrev();
-            }
-          }
-          
-          // Update state after potential change
-          setTimeout(updateSliderState, 50);
+    const wheelHandler = function (this: Element, event: WheelEvent) {
+      // Prevent the default browser behavior for wheel events on the slider
+      event.preventDefault();
+
+      if (!sliderRef.current) return;
+
+      // Determine scroll direction
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      const isScrollingLeft = delta < 0;
+
+      // Get current slider state
+      const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
+      const { currentSlide, slideCount } = innerSlider.state;
+      const slidesToShow = sliderRef.current.props.slidesToShow || 3;
+      const isAtStart = currentSlide === 0;
+      const isAtEnd = currentSlide + slidesToShow >= slideCount;
+
+      // Prevent scrolling when we hit boundaries
+      const isAtLeftBoundary = isAtStart && isScrollingLeft;
+      const isAtRightBoundary = isAtEnd && !isScrollingLeft;
+
+      if (isAtLeftBoundary || isAtRightBoundary) {
+        // Add a visual feedback for blocked scrolling
+        const slider = this.closest('.lme-slider') as HTMLElement;
+        if (slider) {
+          slider.classList.add('boundary-hit');
+          setTimeout(() => slider.classList.remove('boundary-hit'), 300);
         }
+        return;
       }
-      // Don't prevent default for vertical scrolls - let them pass through
+
+      // Perform the appropriate slider navigation based on scroll direction
+      if (isScrollingLeft) {
+        sliderRef.current.slickPrev();
+      } else {
+        sliderRef.current.slickNext();
+      }
+
+      // Update the slider state immediately after scrolling
+      setTimeout(updateSliderState, 50);
     };
-    
-    // Track wheel events for horizontal scrolling - now with proper typing
+
+    // Add event listeners
     sliderElement.addEventListener('wheel', wheelHandler, { passive: false });
-    
-    // Store the handler and element for cleanup
-    return { 
-      element: sliderElement, 
+
+    // Clean up function that we'll return
+    return {
+      element: sliderElement,
       handler: wheelHandler
     };
   }, [updateSliderState]);
@@ -388,13 +471,13 @@ export default function MarketDashboard() {
         closePopup();
       }
     };
-    
+
     if (showLMEPopup) {
       window.addEventListener('keydown', handleEsc);
       // Prevent scrolling when popup is open
       document.body.style.overflow = 'hidden';
     }
-    
+
     return () => {
       window.removeEventListener('keydown', handleEsc);
       document.body.style.overflow = '';
@@ -407,39 +490,39 @@ export default function MarketDashboard() {
     const preventKeyboardWrap = (e: KeyboardEvent) => {
       // Only handle left/right arrow keys, let up/down pass through
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      
+
       // Check boundaries
       if (!sliderRef.current?.innerSlider) return;
-      
+
       const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
       const { currentSlide, slideCount } = innerSlider.state;
       const slidesToShow = sliderRef.current.props.slidesToShow || 3;
-      
+
       // Prevent default action for keys that would cause wrapping
-      if ((e.key === 'ArrowLeft' && currentSlide === 0) || 
-          (e.key === 'ArrowRight' && currentSlide >= slideCount - slidesToShow)) {
+      if ((e.key === 'ArrowLeft' && currentSlide === 0) ||
+        (e.key === 'ArrowRight' && currentSlide >= slideCount - slidesToShow)) {
         e.preventDefault();
         e.stopPropagation();
         return false;
       }
     };
-    
+
     // Add event listener directly to window
     window.addEventListener('keydown', preventKeyboardWrap, true);
-    
+
     // Standard keyboard navigation but with strict boundaries
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle left/right arrow keys, let up/down pass through
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      
+
       if (sliderRef.current?.innerSlider) {
         const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
         const { currentSlide, slideCount } = innerSlider.state;
         const slidesToShow = sliderRef.current.props.slidesToShow || 3;
-        
+
         const isAtStart = currentSlide === 0;
         const isAtEnd = currentSlide >= slideCount - slidesToShow;
-        
+
         if (e.key === 'ArrowLeft') {
           if (!isAtStart) {
             sliderRef.current.slickPrev();
@@ -473,7 +556,7 @@ export default function MarketDashboard() {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    
+
     return () => {
       window.removeEventListener('keydown', preventKeyboardWrap, true);
       window.removeEventListener('keydown', handleKeyDown);
@@ -488,53 +571,60 @@ export default function MarketDashboard() {
       styleElement.textContent = `${selector} { ${Object.entries(styles).map(([prop, value]) => `${prop}: ${value};`).join(' ')} }`;
       document.head.appendChild(styleElement);
     });
-    
+
     // Call after a short delay to ensure the slider is fully initialized
     setTimeout(() => {
       // Set up the trackpad gestures directly here instead of using extra gesture cleanup
       const sliderElement = document.querySelector('.lme-slider');
       if (sliderElement) {
-        const wheelHandler = function(this: Element, e: WheelEvent) {
-          // Only handle horizontal scrolls or small vertical scrolls that might be intended as horizontal
-          if (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.5) {
-            e.preventDefault();
-            
-            // Safely access slider state if available
-            if (sliderRef.current?.innerSlider) {
-              const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
-              const { currentSlide, slideCount } = innerSlider.state;
-              const slidesToShow = sliderRef.current.props.slidesToShow || 3;
-              
-              // Get current slider state
-              const isAtStart = currentSlide === 0;
-              const isAtEnd = currentSlide >= slideCount - slidesToShow;
-              
-              // Only handle horizontal scrolling
-              if (e.deltaX > 0) {
-                // Only go next if not at the end
-                if (!isAtEnd) {
-                  sliderRef.current.slickNext();
-                }
-              } else if (e.deltaX < 0) {
-                // Only go prev if not at the beginning
-                if (!isAtStart) {
-                  sliderRef.current.slickPrev();
-                }
-              }
-              
-              // Update state after potential change
-              setTimeout(updateSliderState, 50);
+        const wheelHandler = function (this: Element, e: WheelEvent) {
+          // Prevent the default browser behavior for wheel events on the slider
+          e.preventDefault();
+
+          if (!sliderRef.current) return;
+
+          // Determine scroll direction
+          const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+          const isScrollingLeft = delta < 0;
+
+          // Get current slider state
+          const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
+          const { currentSlide, slideCount } = innerSlider.state;
+          const slidesToShow = sliderRef.current.props.slidesToShow || 3;
+          const isAtStart = currentSlide === 0;
+          const isAtEnd = currentSlide + slidesToShow >= slideCount;
+
+          // Prevent scrolling when we hit boundaries
+          const isAtLeftBoundary = isAtStart && isScrollingLeft;
+          const isAtRightBoundary = isAtEnd && !isScrollingLeft;
+
+          if (isAtLeftBoundary || isAtRightBoundary) {
+            // Add a visual feedback for blocked scrolling
+            const slider = this.closest('.lme-slider') as HTMLElement;
+            if (slider) {
+              slider.classList.add('boundary-hit');
+              setTimeout(() => slider.classList.remove('boundary-hit'), 300);
             }
+            return;
           }
-          // Don't prevent default for vertical scrolls - let them pass through
+
+          // Perform the appropriate slider navigation based on scroll direction
+          if (isScrollingLeft) {
+            sliderRef.current.slickPrev();
+          } else {
+            sliderRef.current.slickNext();
+          }
+
+          // Update the slider state immediately after scrolling
+          setTimeout(updateSliderState, 50);
         };
-        
+
         // Track wheel events for horizontal scrolling - now with proper typing
         sliderElement.addEventListener('wheel', wheelHandler, { passive: false });
-        
+
         // Store the handler and element for cleanup
-        gestureCleanup.current = { 
-          element: sliderElement, 
+        gestureCleanup.current = {
+          element: sliderElement,
           handler: wheelHandler
         };
       }
@@ -548,7 +638,7 @@ export default function MarketDashboard() {
           el.remove();
         }
       });
-      
+
       // Remove event listeners properly
       if (gestureCleanup.current) {
         const { element, handler } = gestureCleanup.current;
@@ -563,13 +653,13 @@ export default function MarketDashboard() {
     if (element) {
       // Add highlight class to the card being scrolled to
       element.classList.add('ring-2', 'ring-indigo-400', 'scale-[1.02]');
-      
+
       // Scroll with animation
-      element.scrollIntoView({ 
-        behavior: 'smooth', 
+      element.scrollIntoView({
+        behavior: 'smooth',
         block: 'start',
       });
-      
+
       // Remove highlight after animation completes
       setTimeout(() => {
         element.classList.remove('ring-2', 'ring-indigo-400', 'scale-[1.02]');
@@ -585,15 +675,119 @@ export default function MarketDashboard() {
     return false;
   };
 
+  // Handle escape key to close the popup
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Close modal on escape key
+    if (e.key === 'Escape') {
+      setShowLMEPopup(false);
+    }
+  };
+
+  // Determine which data to display in the DelayedSpotCard
+  const renderDelayedSpotCard = () => {
+    // If we have cash settlement data from the API, show it
+    if (cashSettlementData) {
+      return (
+        <DelayedSpotCard
+          lastUpdated={new Date(cashSettlementData.dateTime)}
+          spotPrice={cashSettlementData.cashSettlement}
+          changePercent={0} // No change percentage in this format
+          isLMECashSettlement={true}
+        />
+      );
+    }
+
+    // Otherwise, use the latestLMEData
+    if (latestLMEData) {
+      return (
+        <DelayedSpotCard
+          lastUpdated={new Date(latestLMEData.date)}
+          spotPrice={latestLMEData.price}
+          changePercent={latestLMEData.Dollar_Difference}
+        />
+      );
+    }
+
+    // Fallback to today's data
+    return (
+      <DelayedSpotCard
+        lastUpdated={currentDate}
+        spotPrice={todaysLMEData.price}
+        changePercent={todaysLMEData.change}
+      />
+    );
+  };
+
+  // Also set up swipe tracking on mobile
+  useEffect(() => {
+    const sliderElement = document.querySelector('.lme-slider');
+    if (!sliderElement) return;
+
+    // Create mutual observer to track state changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName !== 'class') return;
+
+        const slider = mutation.target as HTMLElement;
+        const isAtStart = slider.classList.contains('at-start');
+        const isAtEnd = slider.classList.contains('at-end');
+
+        // Visual edge indicators
+        if (isAtStart) {
+          const track = slider.querySelector('.slick-track') as HTMLElement;
+          if (track) {
+            track.style.marginLeft = '0';
+          }
+        }
+
+        if (isAtEnd) {
+          const track = slider.querySelector('.slick-track') as HTMLElement;
+          if (track) {
+            track.style.marginRight = '0';
+          }
+        }
+      });
+    });
+
+    observer.observe(sliderElement, { attributes: true });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [updateSliderState]);
+
+  // Setup gesture handlers for both desktop and mobile
+  useEffect(() => {
+    // Desktop - wheel scroll handler
+    const cleanup = setupTrackpadGestures();
+    if (cleanup) {
+      gestureCleanup.current = cleanup;
+    }
+
+    // Mobile - touch-based handling already built into react-slick
+    // But we'll add enhanced support for our UI feedback
+    // This uses Hammer.js under the hood via react-slick
+
+    return () => {
+      // Clean up any gesture handlers
+      if (gestureCleanup.current) {
+        const { element, handler } = gestureCleanup.current;
+        if (element && handler) {
+          element.removeEventListener('wheel', handler);
+        }
+      }
+    };
+  }, [setupTrackpadGestures]);
+
   return (
     <div className="max-w-[1366px] mx-auto px-4 pt-4 space-y-2 min-h-screen">
       <FeedbackBanner />
-      
+
       {/* LME Cash Settlement Block */}
       <section className="relative bg-gradient-to-br from-indigo-50/95 via-blue-50/95 to-sky-50/95 backdrop-blur-sm rounded-xl p-4 md:p-6 
         border border-indigo-100/50 shadow-[0_8px_16px_rgba(99,102,241,0.06)] hover:shadow-[0_12px_24px_rgba(99,102,241,0.08)] 
         transition-all duration-300 overflow-hidden">
-        
+
         {/* Decorative background elements */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,0.05)_0%,transparent_50%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(56,189,248,0.05)_0%,transparent_50%)]" />
@@ -603,7 +797,7 @@ export default function MarketDashboard() {
             <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
               LME Cash Settlement
             </h2>
-            <button 
+            <button
               onClick={() => setShowLMEPopup(true)}
               className="px-5 py-2.5 text-sm font-semibold text-white 
                 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700
@@ -630,19 +824,15 @@ export default function MarketDashboard() {
           <div className="relative hidden md:flex items-stretch gap-4">
             {/* Fixed DelayedSpotCard (First Card) */}
             <div className="flex-shrink-0" style={{ width: '23%' }}>
-              <DelayedSpotCard 
-                lastUpdated={currentDate} 
-                spotPrice={todaysLMEData.price}
-                changePercent={todaysLMEData.change}
-              />
+              {renderDelayedSpotCard()}
             </div>
-            
+
             {/* Slider with modern sliding effects and matched heights */}
             <div className="flex-grow relative" style={{ width: '75%' }}>
               {/* Edge indicators */}
               <div className={`slider-edge-indicator start ${sliderState.isAtStart ? 'opacity-0' : ''}`} />
               <div className={`slider-edge-indicator end ${sliderState.isAtEnd ? 'opacity-0' : ''}`} />
-              
+
               <Slider
                 ref={sliderRef}
                 dots={false}
@@ -670,7 +860,7 @@ export default function MarketDashboard() {
                     const innerSlider = sliderRef.current.innerSlider as ExtendedInnerSlider;
                     const { slideCount } = innerSlider.state;
                     const slidesToShow = sliderRef.current.props.slidesToShow || 3;
-                    
+
                     if (newIndex < 0 || newIndex > slideCount - slidesToShow) {
                       return false;
                     }
@@ -705,20 +895,38 @@ export default function MarketDashboard() {
                   }
                 ]}
               >
-                {/* Historical Cards with static data */}
-                {lmeHistoricalData.map((data, index) => (
-                  <div key={`static-${index + 1}`} className="h-full py-0.5 px-2">
-                    <div className="h-full">
-                      <LMECashSettlement 
-                        basePrice={data.basePrice}
-                        spread={data.spread}
-                        spreadINR={data.spreadINR}
-                        isIncrease={data.isIncrease}
-                        formattedDate={data.formattedDate}
-                      />
+                {isLoading ? (
+                  // Loading skeletons for desktop view
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div key={`skeleton-${index}`} className="h-full py-0.5 px-2">
+                      <div className="h-full bg-white rounded-xl p-4 border border-gray-200 shadow-sm animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/3 mb-6"></div>
+                        <div className="h-5 bg-gray-200 rounded w-2/3 mb-3"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                      </div>
                     </div>
+                  ))
+                ) : lmeData.length === 0 ? (
+                  <div className="col-span-3 py-4 text-center text-gray-500">
+                    No LME Cash Settlement data available
                   </div>
-                ))}
+                ) : (
+                  // Real data cards
+                  lmeData.map((data, index) => (
+                    <div key={`static-${index + 1}`} className="h-full py-0.5 px-2">
+                      <div className="h-full">
+                        <LMECashSettlement
+                          basePrice={data.price}
+                          spread={data.Dollar_Difference}
+                          spreadINR={data.INR_Difference.toString()}
+                          isIncrease={data.Dollar_Difference > 0}
+                          formattedDate={formatDate(data.date)}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
               </Slider>
             </div>
           </div>
@@ -727,59 +935,70 @@ export default function MarketDashboard() {
           <div className="md:hidden">
             <div className="space-y-2.5">
               {/* Today's Card */}
-              <DelayedSpotCard 
-                lastUpdated={currentDate} 
-                spotPrice={todaysLMEData.price}
-                changePercent={todaysLMEData.change}
-              />
-              
+              {renderDelayedSpotCard()}
+
               {/* Mobile slider navigation controls - removed as they've been moved to bottom */}
               <div className="mt-4 flex justify-end">
                 <div className="flex space-x-1.5">
                   {/* Original buttons removed since they've been moved to the bottom */}
                 </div>
               </div>
-              
+
               {/* Show only first 3 historical cards or all when expanded */}
               <div className="grid grid-cols-1 gap-2.5 scroll-mt-4 scroll-smooth" id="mobile-cards-container">
-                {lmeHistoricalData
-                  .slice(0, expandedMobileView ? lmeHistoricalData.length : 3)
-                  .map((data, index) => (
-                    <div 
-                      id={`mobile-card-${index}`} 
-                      key={`mobile-${index}`}
-                      className="transition-all duration-300 hover:shadow-md"
-                    >
-                      <LMECashSettlement 
-                        basePrice={data.basePrice}
-                        spread={data.spread}
-                        spreadINR={data.spreadINR}
-                        isIncrease={data.isIncrease}
-                        formattedDate={data.formattedDate}
-                      />
+                {isLoading ? (
+                  // Loading skeletons for mobile view
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div key={`mobile-skeleton-${index}`} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/3 mb-6"></div>
+                      <div className="h-5 bg-gray-200 rounded w-2/3 mb-3"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/4"></div>
                     </div>
-                  ))}
+                  ))
+                ) : lmeData.length === 0 ? (
+                  <div className="py-4 text-center text-gray-500">
+                    No LME Cash Settlement data available
+                  </div>
+                ) : (
+                  lmeData
+                    .slice(0, expandedMobileView ? lmeData.length : 3)
+                    .map((data, index) => (
+                      <div
+                        key={`mobile-${index + 1}`}
+                        id={`mobile-card-${index}`}
+                      >
+                        <LMECashSettlement
+                          basePrice={data.price}
+                          spread={data.Dollar_Difference}
+                          spreadINR={data.INR_Difference.toString()}
+                          isIncrease={data.Dollar_Difference > 0}
+                          formattedDate={formatDate(data.date)}
+                        />
+                      </div>
+                    ))
+                )}
               </div>
-              
-              {/* Show More / Show Less Button - only if we have more than 3 historical entries */}
-              {lmeHistoricalData.length > 3 && (
-                <button 
+
+              {/* Show More / Show Less Button - only if we have more than 3 historical entries and not loading */}
+              {!isLoading && lmeData.length > 3 && (
+                <button
                   onClick={() => setExpandedMobileView(!expandedMobileView)}
                   className="w-full mt-1.5 py-2.5 px-4 text-sm font-medium text-indigo-700 bg-indigo-50 
                     hover:bg-indigo-100 rounded-md border border-indigo-200 transition-all duration-200
                     flex items-center justify-center gap-2"
                 >
                   <span>{expandedMobileView ? 'Show Less' : 'Show More'}</span>
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="16" 
-                    height="16" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     className={`transition-transform duration-300 ${expandedMobileView ? 'rotate-180' : ''}`}
                   >
                     <polyline points="6 9 12 15 18 9"></polyline>
@@ -788,14 +1007,14 @@ export default function MarketDashboard() {
               )}
             </div>
           </div>
-          
+
           {/* Source attribution with navigation buttons - now placed at right bottom corner */}
           <div className="flex justify-between items-center mt-2 md:mt-3">
             <p className="text-sm text-gray-500">Source: Westmetals</p>
-            
+
             {/* Navigation buttons - more functional and precise styling */}
             <div className="flex space-x-2">
-              <button 
+              <button
                 onClick={() => {
                   if (isMobileView()) {
                     // For mobile view, use enhanced scroll function
@@ -803,13 +1022,19 @@ export default function MarketDashboard() {
                     scrollToCard(currentIndex);
                   } else {
                     // For desktop view, use the slider's previous function
-                    sliderRef.current?.slickPrev();
+                    if (sliderRef.current) {
+                      sliderRef.current.slickPrev();
+                      // Force update slider state after navigation
+                      setTimeout(updateSliderState, 50);
+                      // Add extra timeout to ensure UI is updated
+                      setTimeout(updateSliderState, 200);
+                    }
                   }
                 }}
                 disabled={sliderState.isAtStart && !isMobileView()}
                 className={`w-9 h-9 flex items-center justify-center rounded-md
-                  ${!isMobileView() && sliderState.isAtStart 
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  ${!isMobileView() && sliderState.isAtStart
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 active:from-indigo-800 active:to-blue-800'} 
                   transition-all duration-200 shadow-md`}
                 aria-label="Previous card"
@@ -818,22 +1043,28 @@ export default function MarketDashboard() {
                   <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
               </button>
-              <button 
+              <button
                 onClick={() => {
                   if (isMobileView()) {
                     // For mobile view, use enhanced scroll function
-                    const visibleCards = expandedMobileView ? lmeHistoricalData.length : 3;
+                    const visibleCards = expandedMobileView ? lmeData.length : 3;
                     const nextIndex = Math.min(visibleCards - 1, 3);
                     scrollToCard(nextIndex);
                   } else {
                     // For desktop view, use the slider's next function
-                    sliderRef.current?.slickNext();
+                    if (sliderRef.current) {
+                      sliderRef.current.slickNext();
+                      // Force update slider state after navigation
+                      setTimeout(updateSliderState, 50);
+                      // Add extra timeout to ensure UI is updated
+                      setTimeout(updateSliderState, 200);
+                    }
                   }
                 }}
                 disabled={sliderState.isAtEnd && !isMobileView()}
                 className={`w-9 h-9 flex items-center justify-center rounded-md
-                  ${!isMobileView() && sliderState.isAtEnd 
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  ${!isMobileView() && sliderState.isAtEnd
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 active:from-indigo-800 active:to-blue-800'} 
                   transition-all duration-200 shadow-md`}
                 aria-label="Next card"
@@ -871,7 +1102,7 @@ export default function MarketDashboard() {
           </div>
         </div>
       </div>
-      
+
       {/* Price Alert for mobile view - at bottom */}
       <div className="md:hidden">
         <PriceAlert />
@@ -879,89 +1110,104 @@ export default function MarketDashboard() {
 
       {/* LME Cash Settlement Popup */}
       {showLMEPopup && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
-          onClick={closePopup}
+        <div
+          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50"
+          onClick={() => setShowLMEPopup(false)}
         >
-          <div 
-            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fadeIn overflow-hidden
-              border border-gray-100 p-5 md:p-8"
-            style={{
-              animation: "fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)"
-            }}
+          <div
+            className="relative bg-white rounded-xl p-5 max-w-md w-full m-4 shadow-xl"
+            onKeyDown={handleKeyDown}
+            tabIndex={0}
+            ref={modalRef}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Decorative elements */}
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-100 rounded-full opacity-50 z-0"></div>
-            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-indigo-100 rounded-full opacity-50 z-0"></div>
-            
-            {/* Close button with improved positioning and styling */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent event bubbling
-                console.log("Close button clicked"); // Debug log
-                closePopup();
-              }} 
-              className="absolute top-3 right-3 md:top-4 md:right-4 z-20 h-8 w-8 md:h-10 md:w-10 flex items-center justify-center
-                bg-white hover:bg-gray-100 rounded-full shadow-md border border-gray-300
-                text-gray-700 hover:text-gray-900 transition-all duration-200
-                cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transform hover:scale-105"
+            <button
+              className="absolute right-4 top-4 text-gray-500 hover:text-gray-700"
+              onClick={() => setShowLMEPopup(false)}
               aria-label="Close popup"
-              type="button"
             >
-              <X size={18} strokeWidth={2.5} className="md:hidden" />
-              <X size={20} strokeWidth={2.5} className="hidden md:block" />
+              <X size={20} />
             </button>
-            
-            {/* Header with refined styling */}
-            <div className="mb-5 md:mb-8 relative z-10">
-              <h3 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-700 bg-clip-text text-transparent leading-tight">
-                Today&apos;s LME Cash Settlement
-              </h3>
-              <div className="w-20 md:w-24 h-1 bg-gradient-to-r from-indigo-600 to-blue-600 mt-2 md:mt-3 rounded-full"></div>
+
+            <div className="mb-4">
+              <h3 className="text-xl font-bold text-indigo-700">LME Cash Settlement</h3>
+              <p className="text-sm text-gray-600">Current day reference price</p>
             </div>
-            
-            {/* Content with refined styling */}
-            <div className="space-y-5 md:space-y-8 relative z-10">
-              {/* Price */}
-              <div className="flex items-center gap-4 md:gap-6">
-                <div className="p-3 md:p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200/50">
-                  <DollarSign className="w-6 h-6 md:w-7 md:h-7 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1 md:mb-1.5">Settlement Price</p>
-                  <p className="text-2xl md:text-3xl font-bold text-gray-900 font-mono">${todaysLMEData.price.toFixed(2)}</p>
-                </div>
+
+            {isLoading || (!latestLMEData && !cashSettlementData) ? (
+              // Loading skeleton for the popup
+              <div className="animate-pulse">
+                <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                <div className="h-8 bg-gray-200 rounded-lg w-1/2 mb-3"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/4 mb-5"></div>
+                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
               </div>
-              
-              {/* Date */}
-              <div className="flex items-center gap-4 md:gap-6">
-                <div className="p-3 md:p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl shadow-sm border border-indigo-200/50">
-                  <Calendar className="w-6 h-6 md:w-7 md:h-7 text-indigo-600" />
+            ) : cashSettlementData ? (
+              // Show cash settlement data if available
+              <>
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar size={16} className="text-indigo-600" />
+                  <span className="text-sm font-medium">{formatDate(cashSettlementData.dateTime)}</span>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-1 md:mb-1.5">Date</p>
-                  <p className="text-lg md:text-xl font-medium text-gray-900">{todaysLMEData.date}</p>
+
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock size={14} className="text-gray-500" />
+                  <span className="text-xs text-gray-500">Last updated: {new Date(cashSettlementData.dateTime).toLocaleTimeString()}</span>
                 </div>
-              </div>
-              
-              {/* Time */}
-              <div className="flex items-center gap-4 md:gap-6">
-                <div className="p-3 md:p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-sm border border-purple-200/50">
-                  <Clock className="w-6 h-6 md:w-7 md:h-7 text-purple-600" />
+
+                <div className="bg-indigo-50 p-3 rounded-lg mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-gray-600">Price</span>
+                    <span className="text-lg font-bold text-indigo-700">${cashSettlementData.cashSettlement.toFixed(2)}</span>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-1 md:mb-1.5">Time</p>
-                  <p className="text-lg md:text-xl font-medium text-gray-900">{todaysLMEData.time}</p>
+
+                <div className="mt-4 text-xs text-gray-500">
+                  <p>Cash settlement price for aluminum on the London Metal Exchange.</p>
                 </div>
-              </div>
-            </div>
-            
-            {/* Footer - without source attribution */}
-            <div className="mt-6 md:mt-10 pt-3 md:pt-5 border-t border-gray-100 relative z-10">
-              {/* Footer content removed as requested */}
-            </div>
+              </>
+            ) : latestLMEData && (
+              // Show LME data from database if cash settlement not available
+              <>
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar size={16} className="text-indigo-600" />
+                  <span className="text-sm font-medium">{formatDate(latestLMEData.date)}</span>
+                </div>
+
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock size={14} className="text-gray-500" />
+                  <span className="text-xs text-gray-500">Last updated: {new Date(latestLMEData.updatedAt).toLocaleTimeString()}</span>
+                </div>
+
+                <div className="bg-indigo-50 p-3 rounded-lg mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-gray-600">Price</span>
+                    <span className="text-lg font-bold text-indigo-700">${latestLMEData.price.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200 pt-3 mt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Change (USD)</span>
+                    <span className={`text-sm font-medium ${latestLMEData.Dollar_Difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {latestLMEData.Dollar_Difference > 0 ? '+' : ''}{latestLMEData.Dollar_Difference.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Change (INR)</span>
+                    <span className={`text-sm font-medium ${latestLMEData.INR_Difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {latestLMEData.INR_Difference > 0 ? '+' : ''}₹{latestLMEData.INR_Difference.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-xs text-gray-500">
+                  <p>Cash settlement price for aluminum on the London Metal Exchange.</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

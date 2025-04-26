@@ -1,13 +1,31 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Define a type for the extended PrismaClient that includes our custom models
+type ExtendedPrismaClient = PrismaClient & {
+  lME_West_Metal_Price: {
+    upsert: (params: {
+      where: { date: string };
+      update: { Price: number };
+      create: { date: string; Price: number };
+    }) => Promise<{ id: number; date: string; Price: number; createdAt: Date }>;
+  };
+};
 
+const prisma = new PrismaClient() as ExtendedPrismaClient;
+
+// Define interfaces for different response formats
 interface PriceData {
   spot_price: number;
   price_change: number;
   change_percentage: number;
   last_updated: string;
+}
+
+// New interface for cash settlement format
+interface CashSettlementData {
+  cashSettlement: number;
+  dateTime: string;
 }
 
 // Cache control headers to prevent browser caching
@@ -112,6 +130,57 @@ async function removeDuplicateRecords(metal: string) {
   }
 }
 
+// Function to save cash settlement data to LME_West_Metal_Price table
+async function saveLmeWestMetalPrice(price: number, dateTime: string): Promise<boolean> {
+  try {
+    // Format the date string properly
+    const date = new Date(dateTime).toISOString();
+    
+    // Save to LME_West_Metal_Price table using upsert to avoid duplicates
+    await prisma.lME_West_Metal_Price.upsert({
+      where: {
+        date: date
+      },
+      update: {
+        Price: price
+      },
+      create: {
+        date: date,
+        Price: price
+      }
+    });
+    
+    console.log(`Saved cash settlement data: ${price} at ${dateTime}`);
+    
+    // Trigger LME cash settlement calculation
+    try {
+      const calculationResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/lmecashcal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          source: 'lme_west_update'
+        })
+      });
+      
+      if (calculationResponse.ok) {
+        console.log('LME cash settlement calculation triggered successfully');
+      } else {
+        console.warn('LME cash settlement calculation trigger failed:', 
+          await calculationResponse.text());
+      }
+    } catch (error) {
+      console.error('Error triggering LME cash settlement calculation:', error);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving cash settlement data:', error);
+    return false;
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -196,62 +265,176 @@ export default async function handler(
       throw new Error(`Failed to fetch price data from backend: ${response.status} ${response.statusText}`);
     }
     
-    const data: PriceData = await response.json();
-    const lastUpdatedDate = new Date(data.last_updated);
+    const rawData = await response.json();
     
-    // Adjust spotPrice calculation: spotPrice = spotPrice - (-change)
-    // Only apply this calculation if change is negative
-    const adjustedSpotPrice = data.price_change < 0 ? 
-      data.spot_price - (-data.price_change) : 
-      data.spot_price;
-    
-    // Check if we already have a record with this timestamp AND price
-    const existingRecord = await prisma.metalPrice.findFirst({
-      where: {
-        metal: 'aluminum',
-        lastUpdated: lastUpdatedDate,
-        spotPrice: adjustedSpotPrice
+    // Check which format the response is in
+    if ('is_cash_settlement' in rawData) {
+      // New data format with is_cash_settlement flag
+      if (rawData.is_cash_settlement === true && rawData.cash_settlement !== null) {
+        // Handle cash settlement data
+        await saveLmeWestMetalPrice(rawData.cash_settlement, rawData.last_updated);
+        
+        return res.status(200).json({
+          type: 'cashSettlement',
+          cashSettlement: rawData.cash_settlement,
+          dateTime: rawData.last_updated
+        });
+      } else if (rawData.spot_price !== null) {
+        // Handle spot price data when available
+        const lastUpdatedDate = new Date(rawData.last_updated);
+        
+        // Check if we already have a record with this timestamp AND price
+        const existingRecord = await prisma.metalPrice.findFirst({
+          where: {
+            metal: 'aluminum',
+            lastUpdated: lastUpdatedDate,
+            ...(rawData.spot_price !== null && { spotPrice: rawData.spot_price })
+          }
+        });
+        
+        let isNewRecord = false;
+        
+        // Only create a new record if one doesn't exist with this timestamp and price
+        if (!existingRecord && rawData.spot_price !== null) {
+          await prisma.metalPrice.create({
+            data: {
+              metal: 'aluminum',
+              spotPrice: rawData.spot_price,
+              change: rawData.price_change || 0,
+              changePercent: rawData.change_percentage || 0,
+              lastUpdated: lastUpdatedDate
+            }
+          });
+          console.log(`New price record created: ${rawData.spot_price} at ${rawData.last_updated}`);
+          isNewRecord = true;
+        } else {
+          console.log(`Skipped duplicate or null record at ${rawData.last_updated}`);
+        }
+        
+        // Run cleanup process as before
+        if (isNewRecord && (Math.random() < 0.1 || req.query.cleanup === 'true')) {
+          Promise.all([
+            removeDuplicateRecords('aluminum'),
+            cleanupOldRecords('aluminum', 100)
+          ]).catch(err => console.error('Background cleanup failed:', err));
+        }
+        
+        return res.status(200).json({
+          type: 'spotPrice',
+          spotPrice: rawData.spot_price,
+          change: rawData.price_change || 0,
+          changePercent: rawData.change_percentage || 0,
+          lastUpdated: rawData.last_updated
+        });
+      } else {
+        // Handle case when both spot_price and cash_settlement are null
+        console.log('Received data with null values:', JSON.stringify(rawData));
+        
+        // Try to get the latest price data from the database
+        const latestPrice = await prisma.metalPrice.findFirst({
+          where: { metal: 'aluminum' },
+          orderBy: [
+            { lastUpdated: 'desc' },
+            { createdAt: 'desc' }
+          ]
+        });
+        
+        if (latestPrice) {
+          return res.status(200).json({
+            type: 'spotPrice',
+            spotPrice: Number(latestPrice.spotPrice),
+            change: Number(latestPrice.change),
+            changePercent: Number(latestPrice.changePercent),
+            lastUpdated: latestPrice.lastUpdated.toISOString()
+          });
+        } else {
+          return res.status(200).json({
+            type: 'noData',
+            message: 'No price data available'
+          });
+        }
       }
-    });
-    
-    let isNewRecord = false;
-    
-    // Only create a new record if one doesn't exist with this timestamp and price
-    if (!existingRecord) {
-      await prisma.metalPrice.create({
-        data: {
+    } else if ('cashSettlement' in rawData && 'dateTime' in rawData) {
+      // Handle original cash settlement format
+      const cashData = rawData as CashSettlementData;
+      
+      // Save to LME_West_Metal_Price table
+      await saveLmeWestMetalPrice(cashData.cashSettlement, cashData.dateTime);
+      
+      // Return the data immediately to the frontend
+      return res.status(200).json({
+        type: 'cashSettlement',
+        cashSettlement: cashData.cashSettlement,
+        dateTime: cashData.dateTime
+      });
+    } else if ('spot_price' in rawData && 'price_change' in rawData) {
+      // Handle regular price data format
+      const data = rawData as PriceData;
+      const lastUpdatedDate = new Date(data.last_updated);
+      
+      // Adjust spotPrice calculation: spotPrice = spotPrice - (-change)
+      // Only apply this calculation if change is negative
+      const adjustedSpotPrice = data.price_change < 0 ? 
+        data.spot_price - (-data.price_change) : 
+        data.spot_price;
+      
+      // Check if we already have a record with this timestamp AND price
+      const existingRecord = await prisma.metalPrice.findFirst({
+        where: {
           metal: 'aluminum',
-          spotPrice: adjustedSpotPrice,
-          change: data.price_change,
-          changePercent: data.change_percentage,
-          lastUpdated: lastUpdatedDate
+          lastUpdated: lastUpdatedDate,
+          ...(adjustedSpotPrice !== null && { spotPrice: adjustedSpotPrice })
         }
       });
-      console.log(`New price record created: ${adjustedSpotPrice} at ${data.last_updated}`);
-      isNewRecord = true;
+      
+      let isNewRecord = false;
+      
+      // Only create a new record if one doesn't exist with this timestamp and price
+      if (!existingRecord) {
+        // Skip creation if spotPrice is null
+        if (adjustedSpotPrice !== null) {
+          await prisma.metalPrice.create({
+            data: {
+              metal: 'aluminum',
+              spotPrice: adjustedSpotPrice,
+              change: data.price_change,
+              changePercent: data.change_percentage,
+              lastUpdated: lastUpdatedDate
+            }
+          });
+          console.log(`New price record created: ${adjustedSpotPrice} at ${data.last_updated}`);
+          isNewRecord = true;
+        } else {
+          console.log(`Skipped record creation due to null spotPrice at ${data.last_updated}`);
+        }
+      } else {
+        console.log(`Skipped duplicate record: ${adjustedSpotPrice} at ${data.last_updated}`);
+      }
+      
+      // If we created a new record, run cleanup process periodically
+      // Randomly decide to run cleanup (1 in 10 chance) or if forced by query param
+      if (isNewRecord && (Math.random() < 0.1 || req.query.cleanup === 'true')) {
+        // Run the cleanup process but don't await it since the user doesn't need to wait for it
+        Promise.all([
+          removeDuplicateRecords('aluminum'),
+          cleanupOldRecords('aluminum', 100)
+        ]).catch(err => console.error('Background cleanup failed:', err));
+      }
+      
+      // Transform the data to match the frontend's expected format
+      const transformedData = {
+        type: 'spotPrice',
+        spotPrice: adjustedSpotPrice,
+        change: data.price_change,
+        changePercent: data.change_percentage,
+        lastUpdated: data.last_updated
+      };
+      
+      return res.status(200).json(transformedData);
     } else {
-      console.log(`Skipped duplicate record: ${adjustedSpotPrice} at ${data.last_updated}`);
+      // Unknown format
+      throw new Error(`Unknown data format received from backend: ${JSON.stringify(rawData)}`);
     }
-    
-    // If we created a new record, run cleanup process periodically
-    // Randomly decide to run cleanup (1 in 10 chance) or if forced by query param
-    if (isNewRecord && (Math.random() < 0.1 || req.query.cleanup === 'true')) {
-      // Run the cleanup process but don't await it since the user doesn't need to wait for it
-      Promise.all([
-        removeDuplicateRecords('aluminum'),
-        cleanupOldRecords('aluminum', 100)
-      ]).catch(err => console.error('Background cleanup failed:', err));
-    }
-    
-    // Transform the data to match the frontend's expected format
-    const transformedData = {
-      spotPrice: adjustedSpotPrice,
-      change: data.price_change,
-      changePercent: data.change_percentage,
-      lastUpdated: data.last_updated
-    };
-    
-    res.status(200).json(transformedData);
   } catch (error) {
     console.error('Error fetching or storing price data:', error);
     
@@ -267,6 +450,7 @@ export default async function handler(
       
       if (latestPrice) {
         const dbData = {
+          type: 'spotPrice',
           spotPrice: Number(latestPrice.spotPrice),
           change: Number(latestPrice.change),
           changePercent: Number(latestPrice.changePercent),
