@@ -145,7 +145,7 @@ export default function Sidebar({
         className={`fixed inset-y-0 left-0 bg-white/90 backdrop-blur-md border-r border-white/30 transition-all duration-300 ease-in-out z-40
           ${isCollapsed ? "w-16" : "w-64"}
           ${isMobileOpen ? "translate-x-0 w-full md:w-64" : "-translate-x-full"}
-          md:translate-x-0 shadow-lg`}
+          md:translate-x-0 shadow-lg overflow-hidden`}
       >
         {/* Collapse Sidebar Button - Desktop Only */}
         <button
@@ -175,7 +175,7 @@ export default function Sidebar({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
+        <nav className={`flex-1 px-3 py-4 space-y-2 ${isCollapsed ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = getActivePage(item.path) === item.id;
@@ -203,7 +203,7 @@ export default function Sidebar({
                   <span className="truncate">{item.label}</span>
                 )}
                 {isCollapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap">
+                  <div className="fixed left-[4.5rem] px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
                     {item.label}
                   </div>
                 )}
@@ -232,7 +232,7 @@ export default function Sidebar({
               </div>
               {!isCollapsed && <span className="truncate">Account</span>}
               {isCollapsed && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap">
+                <div className="fixed left-[4.5rem] px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
                   Account
                 </div>
               )}
@@ -251,7 +251,7 @@ export default function Sidebar({
                 </div>
                 {!isCollapsed && <span className="truncate">Sign In</span>}
                 {isCollapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap">
+                  <div className="fixed left-[4.5rem] px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
                     Sign In
                   </div>
                 )}
@@ -269,7 +269,7 @@ export default function Sidebar({
                 </div>
                 {!isCollapsed && <span className="truncate">Sign Up</span>}
                 {isCollapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap">
+                  <div className="fixed left-[4.5rem] px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
                     Sign Up
                   </div>
                 )}
@@ -295,7 +295,7 @@ export default function Sidebar({
                 <span>Settings</span>
               )}
               {isCollapsed && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap">
+                <div className="fixed left-[4.5rem] px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
                   Settings
                 </div>
               )}

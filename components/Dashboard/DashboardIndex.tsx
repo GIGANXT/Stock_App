@@ -5,12 +5,13 @@ import MCXAluminium from "./MCXAluminium";
 import LMEAluminium from "./LMEAluminium";
 import MonthPrice from "./MonthPrice";
 import RatesDisplay from "./RatesDisplay";
-import DelayedSpotCard from "./DelayedSpotCard";
+import LiveSpotCard from "./LiveSpotCard";
 import FeedbackBanner from "./FeedbackBanner";
-import { X, Clock, Calendar, DollarSign } from "lucide-react";
+import { X, Clock, Calendar, DollarSign, AlertTriangle } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+import { format } from "date-fns";
 
 // Add 'wheel' to ElementEventMap through declaration merging
 declare global {
@@ -189,21 +190,30 @@ export default function MarketDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [latestLMEData, setLatestLMEData] = useState<LMECashSettlementData | null>(null);
   const [cashSettlementData, setCashSettlementData] = useState<MetalPriceCashSettlement | null>(null);
+  const [metalPriceData, setMetalPriceData] = useState<MetalPriceData | null>(null);
 
   // Fetch Metal Price data which might include cash settlement data
   useEffect(() => {
     const fetchMetalPriceData = async () => {
       try {
-        const response = await fetch('/api/metal-price');
+        // Add cache-busting query parameter and headers
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/api/metal-price?forceMetalPrice=true&returnAverage=false&_t=${timestamp}`, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch metal price data');
         }
 
         const data = await response.json();
 
-        // Check if we received cash settlement data
-        if (data.type === 'cashSettlement') {
-          setCashSettlementData(data as MetalPriceCashSettlement);
+        // Store metal price data
+        if (data.type === 'spotPrice') {
+          setMetalPriceData(data as MetalPriceData);
         }
       } catch (error) {
         console.error('Error fetching metal price data:', error);
@@ -218,12 +228,56 @@ export default function MarketDashboard() {
     return () => clearInterval(intervalId);
   }, []);
 
+  // Fetch cash settlement data
+  useEffect(() => {
+    const fetchCashSettlementData = async () => {
+      try {
+        // Add cache-busting query parameter and headers
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/api/cash-settlement?_t=${timestamp}`, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch cash settlement data');
+        }
+
+        const data = await response.json();
+
+        // Store cash settlement data
+        if (data.type === 'cashSettlement') {
+          setCashSettlementData(data as MetalPriceCashSettlement);
+        }
+      } catch (error) {
+        console.error('Error fetching cash settlement data:', error);
+      }
+    };
+
+    fetchCashSettlementData();
+
+    // Set up polling interval (every 5 minutes)
+    const intervalId = setInterval(fetchCashSettlementData, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   // Fetch LME Cash Settlement data from the API
   useEffect(() => {
     const fetchLMEData = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/lmecashcal');
+        // Add cache-busting query parameter and headers
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/api/lmecashcal?_t=${timestamp}`, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch LME data');
         }
@@ -683,39 +737,184 @@ export default function MarketDashboard() {
     }
   };
 
-  // Determine which data to display in the DelayedSpotCard
-  const renderDelayedSpotCard = () => {
-    // If we have cash settlement data from the API, show it
+  // Determine which data to display in the LiveSpotCard
+  const renderLiveSpotCard = () => {
+    // First priority: Use Metal Price data if available
+    if (metalPriceData) {
+      return (
+        <LiveSpotCard
+          lastUpdated={new Date(metalPriceData.lastUpdated)}
+          spotPrice={metalPriceData.spotPrice}
+          change={metalPriceData.change}
+          changePercent={metalPriceData.changePercent}
+          unit="/MT"
+          apiUrl="/api/metal-price?returnAverage=true"
+        />
+      );
+    }
+    
+    // Second priority: If we have cash settlement data from the API, show it
     if (cashSettlementData) {
       return (
-        <DelayedSpotCard
+        <LiveSpotCard
           lastUpdated={new Date(cashSettlementData.dateTime)}
           spotPrice={cashSettlementData.cashSettlement}
-          changePercent={0} // No change percentage in this format
-          isLMECashSettlement={true}
+          change={0}
+          changePercent={0}
+          unit="/MT"
+          apiUrl="/api/metal-price?returnAverage=true"
         />
       );
     }
 
-    // Otherwise, use the latestLMEData
+    // Third priority: use the latestLMEData
     if (latestLMEData) {
       return (
-        <DelayedSpotCard
+        <LiveSpotCard
           lastUpdated={new Date(latestLMEData.date)}
           spotPrice={latestLMEData.price}
+          change={latestLMEData.Dollar_Difference}
           changePercent={latestLMEData.Dollar_Difference}
+          unit="/MT"
+          apiUrl="/api/metal-price?returnAverage=true"
         />
       );
     }
 
-    // Fallback to today's data
+    // If no data is available, show placeholder card
     return (
-      <DelayedSpotCard
-        lastUpdated={currentDate}
-        spotPrice={todaysLMEData.price}
-        changePercent={todaysLMEData.change}
-      />
+      <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+          shadow-sm hover:shadow-md transition-all duration-200 w-full
+          relative overflow-hidden gpu-render group h-[162px]">
+        
+        {/* Background effect - properly layered */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
+          bg-amber-500 -z-10"></div>
+
+        <div className="relative flex flex-col h-full gap-1 md:gap-2 justify-between">
+          {/* Header with indicator badge */}
+          <div>
+            <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1.5 mb-2">
+              <AlertTriangle className="w-3.5 h-3.5 crisp-text" />
+              <span>No Data Available</span>
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="flex-1 flex flex-col justify-center items-center py-2">
+            <AlertTriangle size={24} className="text-amber-500 mb-2" />
+            <p className="text-sm text-gray-600 text-center">
+              No price data available
+            </p>
+          </div>
+          
+          {/* Footer */}
+          <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
+            <div className="font-bold">
+              {format(new Date(), 'dd. MMMM yyyy')}
+            </div>
+          </div>
+        </div>
+      </div>
     );
+  };
+
+  // Determine which data to display in the LME Cash Settlement Popup
+  const renderPopupData = () => {
+    if (isLoading) {
+      // Loading skeleton for the popup
+      return (
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+          <div className="h-8 bg-gray-200 rounded-lg w-1/2 mb-3"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/4 mb-5"></div>
+          <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+        </div>
+      );
+    } else if (!latestLMEData && !cashSettlementData) {
+      // No data available
+      return (
+        <div className="text-center py-6">
+          <AlertTriangle size={40} className="mx-auto text-amber-500 mb-4" />
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No Settlement Data Available</h3>
+          <p className="text-gray-600 mb-4">
+            There is currently no LME Cash Settlement data available.
+          </p>
+          <p className="text-xs text-gray-500">
+            The data will appear automatically when it becomes available.
+          </p>
+        </div>
+      );
+    } else if (cashSettlementData) {
+      // Show cash settlement data if available
+      return (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar size={16} className="text-indigo-600" />
+            <span className="text-sm font-medium">{formatDate(cashSettlementData.dateTime)}</span>
+          </div>
+
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={14} className="text-gray-500" />
+            <span className="text-xs text-gray-500">Last updated: {new Date(cashSettlementData.dateTime).toLocaleTimeString()}</span>
+          </div>
+
+          <div className="bg-indigo-50 p-3 rounded-lg mb-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-gray-600">Price</span>
+              <span className="text-lg font-bold text-indigo-700">${cashSettlementData.cashSettlement.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 text-xs text-gray-500">
+            <p>Cash settlement price for aluminum on the London Metal Exchange.</p>
+          </div>
+        </>
+      );
+    } else if (latestLMEData) {
+      // Show LME data from database if cash settlement not available
+      return (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar size={16} className="text-indigo-600" />
+            <span className="text-sm font-medium">{formatDate(latestLMEData.date)}</span>
+          </div>
+
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={14} className="text-gray-500" />
+            <span className="text-xs text-gray-500">Last updated: {new Date(latestLMEData.updatedAt).toLocaleTimeString()}</span>
+          </div>
+
+          <div className="bg-indigo-50 p-3 rounded-lg mb-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-gray-600">Price</span>
+              <span className="text-lg font-bold text-indigo-700">${latestLMEData.price.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-3 mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-600">Change (USD)</span>
+              <span className={`text-sm font-medium ${latestLMEData.Dollar_Difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {latestLMEData.Dollar_Difference > 0 ? '+' : ''}{latestLMEData.Dollar_Difference.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Change (INR)</span>
+              <span className={`text-sm font-medium ${latestLMEData.INR_Difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {latestLMEData.INR_Difference > 0 ? '+' : ''}₹{Number(latestLMEData.INR_Difference).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4 text-xs text-gray-500">
+            <p>Cash settlement price for aluminum on the London Metal Exchange.</p>
+          </div>
+        </>
+      );
+    }
   };
 
   // Also set up swipe tracking on mobile
@@ -797,6 +996,7 @@ export default function MarketDashboard() {
             <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
               LME Cash Settlement
             </h2>
+            {(cashSettlementData || latestLMEData) && (
             <button
               onClick={() => setShowLMEPopup(true)}
               className="px-5 py-2.5 text-sm font-semibold text-white 
@@ -818,13 +1018,14 @@ export default function MarketDashboard() {
                 <span className="whitespace-nowrap">Today&apos;s LME Cash Settlement</span>
               </div>
             </button>
+            )}
           </div>
 
           {/* Desktop View - Slider */}
           <div className="relative hidden md:flex items-stretch gap-4">
             {/* Fixed DelayedSpotCard (First Card) */}
             <div className="flex-shrink-0" style={{ width: '23%' }}>
-              {renderDelayedSpotCard()}
+              {renderLiveSpotCard()}
             </div>
 
             {/* Slider with modern sliding effects and matched heights */}
@@ -899,17 +1100,65 @@ export default function MarketDashboard() {
                   // Loading skeletons for desktop view
                   Array.from({ length: 3 }).map((_, index) => (
                     <div key={`skeleton-${index}`} className="h-full py-0.5 px-2">
-                      <div className="h-full bg-white rounded-xl p-4 border border-gray-200 shadow-sm animate-pulse">
-                        <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/3 mb-6"></div>
-                        <div className="h-5 bg-gray-200 rounded w-2/3 mb-3"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                      <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+                          shadow-sm hover:shadow-md transition-all duration-200 w-full
+                          relative overflow-hidden gpu-render h-[162px]">
+                        <div className="flex flex-col h-full gap-1 md:gap-2 justify-between">
+                          {/* Header with indicator badge */}
+                          <div>
+                            <div className="h-5 w-32 bg-gray-200 animate-pulse rounded-full mb-2"></div>
+                          </div>
+                          
+                          {/* Price Content */}
+                          <div className="flex-1 py-1 md:py-2">
+                            <div className="h-6 w-28 md:w-32 bg-gray-200 animate-pulse mb-3 rounded"></div>
+                            <div className="h-4 w-24 bg-gray-200 animate-pulse mb-2 rounded"></div>
+                            <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
+                          </div>
+                          
+                          {/* Footer */}
+                          <div className="flex items-center justify-between pt-2">
+                            <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))
                 ) : lmeData.length === 0 ? (
-                  <div className="col-span-3 py-4 text-center text-gray-500">
-                    No LME Cash Settlement data available
+                  <div className="col-span-3 py-0.5 px-2">
+                    <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+                        shadow-sm hover:shadow-md transition-all duration-200 w-full
+                        relative overflow-hidden gpu-render group h-[162px]">
+                      
+                      {/* Background effect - properly layered */}
+                      <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
+                        bg-amber-500 -z-10"></div>
+
+                      <div className="relative flex flex-col h-full gap-1 md:gap-2 justify-between">
+                        {/* Header with indicator badge */}
+                        <div>
+                          <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1.5 mb-2">
+                            <AlertTriangle className="w-3.5 h-3.5 crisp-text" />
+                            <span>No Data Available</span>
+                          </div>
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="flex-1 flex flex-col justify-center items-center py-2">
+                          <AlertTriangle size={24} className="text-amber-500 mb-2" />
+                          <p className="text-sm text-gray-600 text-center">
+                            No LME Cash Settlement data available
+                          </p>
+                        </div>
+                        
+                        {/* Footer */}
+                        <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
+                          <div className="font-bold">
+                            {format(new Date(), 'dd. MMMM yyyy')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   // Real data cards
@@ -919,7 +1168,7 @@ export default function MarketDashboard() {
                         <LMECashSettlement
                           basePrice={data.price}
                           spread={data.Dollar_Difference}
-                          spreadINR={data.INR_Difference.toString()}
+                          spreadINR={Number(data.INR_Difference).toFixed(2)}
                           isIncrease={data.Dollar_Difference > 0}
                           formattedDate={formatDate(data.date)}
                         />
@@ -935,7 +1184,7 @@ export default function MarketDashboard() {
           <div className="md:hidden">
             <div className="space-y-2.5">
               {/* Today's Card */}
-              {renderDelayedSpotCard()}
+              {renderLiveSpotCard()}
 
               {/* Mobile slider navigation controls - removed as they've been moved to bottom */}
               <div className="mt-4 flex justify-end">
@@ -949,17 +1198,64 @@ export default function MarketDashboard() {
                 {isLoading ? (
                   // Loading skeletons for mobile view
                   Array.from({ length: 3 }).map((_, index) => (
-                    <div key={`mobile-skeleton-${index}`} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm animate-pulse">
-                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/3 mb-6"></div>
-                      <div className="h-5 bg-gray-200 rounded w-2/3 mb-3"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                    <div key={`mobile-skeleton-${index}`} 
+                        className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+                        shadow-sm hover:shadow-md transition-all duration-200 w-full
+                        relative overflow-hidden gpu-render h-[162px]">
+                      <div className="flex flex-col h-full gap-1 md:gap-2 justify-between">
+                        {/* Header with indicator badge */}
+                        <div>
+                          <div className="h-5 w-32 bg-gray-200 animate-pulse rounded-full mb-2"></div>
+                        </div>
+                        
+                        {/* Price Content */}
+                        <div className="flex-1 py-1 md:py-2">
+                          <div className="h-6 w-28 md:w-32 bg-gray-200 animate-pulse mb-3 rounded"></div>
+                          <div className="h-4 w-24 bg-gray-200 animate-pulse mb-2 rounded"></div>
+                          <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
+                        </div>
+                        
+                        {/* Footer */}
+                        <div className="flex items-center justify-between pt-2">
+                          <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
+                        </div>
+                      </div>
                     </div>
                   ))
                 ) : lmeData.length === 0 ? (
-                  <div className="py-4 text-center text-gray-500">
-                    No LME Cash Settlement data available
-                  </div>
+                  <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+                      shadow-sm hover:shadow-md transition-all duration-200 w-full
+                      relative overflow-hidden gpu-render group h-[162px]">
+                      
+                      {/* Background effect - properly layered */}
+                      <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
+                        bg-amber-500 -z-10"></div>
+
+                      <div className="relative flex flex-col h-full gap-1 md:gap-2 justify-between">
+                        {/* Header with indicator badge */}
+                        <div>
+                          <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1.5 mb-2">
+                            <AlertTriangle className="w-3.5 h-3.5 crisp-text" />
+                            <span>No Data Available</span>
+                          </div>
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="flex-1 flex flex-col justify-center items-center py-2">
+                          <AlertTriangle size={24} className="text-amber-500 mb-2" />
+                          <p className="text-sm text-gray-600 text-center">
+                            No LME Cash Settlement data available
+                          </p>
+                        </div>
+                        
+                        {/* Footer */}
+                        <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
+                          <div className="font-bold">
+                            {format(new Date(), 'dd. MMMM yyyy')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                 ) : (
                   lmeData
                     .slice(0, expandedMobileView ? lmeData.length : 3)
@@ -971,7 +1267,7 @@ export default function MarketDashboard() {
                         <LMECashSettlement
                           basePrice={data.price}
                           spread={data.Dollar_Difference}
-                          spreadINR={data.INR_Difference.toString()}
+                          spreadINR={Number(data.INR_Difference).toFixed(2)}
                           isIncrease={data.Dollar_Difference > 0}
                           formattedDate={formatDate(data.date)}
                         />
@@ -1013,27 +1309,18 @@ export default function MarketDashboard() {
             <p className="text-sm text-gray-500">Source: Westmetals</p>
 
             {/* Navigation buttons - more functional and precise styling */}
-            <div className="flex space-x-2">
+            <div className="hidden md:flex space-x-2">
               <button
                 onClick={() => {
-                  if (isMobileView()) {
-                    // For mobile view, use enhanced scroll function
-                    const currentIndex = expandedMobileView ? 0 : Math.max(0, 3 - 1);
-                    scrollToCard(currentIndex);
-                  } else {
-                    // For desktop view, use the slider's previous function
-                    if (sliderRef.current) {
-                      sliderRef.current.slickPrev();
-                      // Force update slider state after navigation
-                      setTimeout(updateSliderState, 50);
-                      // Add extra timeout to ensure UI is updated
-                      setTimeout(updateSliderState, 200);
-                    }
+                  if (sliderRef.current) {
+                    sliderRef.current.slickPrev();
+                    setTimeout(updateSliderState, 50);
+                    setTimeout(updateSliderState, 200);
                   }
                 }}
-                disabled={sliderState.isAtStart && !isMobileView()}
+                disabled={sliderState.isAtStart}
                 className={`w-9 h-9 flex items-center justify-center rounded-md
-                  ${!isMobileView() && sliderState.isAtStart
+                  ${sliderState.isAtStart
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 active:from-indigo-800 active:to-blue-800'} 
                   transition-all duration-200 shadow-md`}
@@ -1045,25 +1332,15 @@ export default function MarketDashboard() {
               </button>
               <button
                 onClick={() => {
-                  if (isMobileView()) {
-                    // For mobile view, use enhanced scroll function
-                    const visibleCards = expandedMobileView ? lmeData.length : 3;
-                    const nextIndex = Math.min(visibleCards - 1, 3);
-                    scrollToCard(nextIndex);
-                  } else {
-                    // For desktop view, use the slider's next function
-                    if (sliderRef.current) {
-                      sliderRef.current.slickNext();
-                      // Force update slider state after navigation
-                      setTimeout(updateSliderState, 50);
-                      // Add extra timeout to ensure UI is updated
-                      setTimeout(updateSliderState, 200);
-                    }
+                  if (sliderRef.current) {
+                    sliderRef.current.slickNext();
+                    setTimeout(updateSliderState, 50);
+                    setTimeout(updateSliderState, 200);
                   }
                 }}
-                disabled={sliderState.isAtEnd && !isMobileView()}
+                disabled={sliderState.isAtEnd}
                 className={`w-9 h-9 flex items-center justify-center rounded-md
-                  ${!isMobileView() && sliderState.isAtEnd
+                  ${sliderState.isAtEnd
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 active:from-indigo-800 active:to-blue-800'} 
                   transition-all duration-200 shadow-md`}
@@ -1134,80 +1411,7 @@ export default function MarketDashboard() {
               <p className="text-sm text-gray-600">Current day reference price</p>
             </div>
 
-            {isLoading || (!latestLMEData && !cashSettlementData) ? (
-              // Loading skeleton for the popup
-              <div className="animate-pulse">
-                <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-                <div className="h-8 bg-gray-200 rounded-lg w-1/2 mb-3"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-5"></div>
-                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-              </div>
-            ) : cashSettlementData ? (
-              // Show cash settlement data if available
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar size={16} className="text-indigo-600" />
-                  <span className="text-sm font-medium">{formatDate(cashSettlementData.dateTime)}</span>
-                </div>
-
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock size={14} className="text-gray-500" />
-                  <span className="text-xs text-gray-500">Last updated: {new Date(cashSettlementData.dateTime).toLocaleTimeString()}</span>
-                </div>
-
-                <div className="bg-indigo-50 p-3 rounded-lg mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-gray-600">Price</span>
-                    <span className="text-lg font-bold text-indigo-700">${cashSettlementData.cashSettlement.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 text-xs text-gray-500">
-                  <p>Cash settlement price for aluminum on the London Metal Exchange.</p>
-                </div>
-              </>
-            ) : latestLMEData && (
-              // Show LME data from database if cash settlement not available
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar size={16} className="text-indigo-600" />
-                  <span className="text-sm font-medium">{formatDate(latestLMEData.date)}</span>
-                </div>
-
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock size={14} className="text-gray-500" />
-                  <span className="text-xs text-gray-500">Last updated: {new Date(latestLMEData.updatedAt).toLocaleTimeString()}</span>
-                </div>
-
-                <div className="bg-indigo-50 p-3 rounded-lg mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-gray-600">Price</span>
-                    <span className="text-lg font-bold text-indigo-700">${latestLMEData.price.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-200 pt-3 mt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">Change (USD)</span>
-                    <span className={`text-sm font-medium ${latestLMEData.Dollar_Difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {latestLMEData.Dollar_Difference > 0 ? '+' : ''}{latestLMEData.Dollar_Difference.toFixed(2)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Change (INR)</span>
-                    <span className={`text-sm font-medium ${latestLMEData.INR_Difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {latestLMEData.INR_Difference > 0 ? '+' : ''}₹{latestLMEData.INR_Difference.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-4 text-xs text-gray-500">
-                  <p>Cash settlement price for aluminum on the London Metal Exchange.</p>
-                </div>
-              </>
-            )}
+            {renderPopupData()}
           </div>
         </div>
       )}

@@ -1,18 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
 
-// Define a type for the extended PrismaClient that includes our custom models
-type ExtendedPrismaClient = PrismaClient & {
-  lME_West_Metal_Price: {
-    upsert: (params: {
-      where: { date: string };
-      update: { Price: number };
-      create: { date: string; Price: number };
-    }) => Promise<{ id: number; date: string; Price: number; createdAt: Date }>;
-  };
-};
-
-const prisma = new PrismaClient() as ExtendedPrismaClient;
+const prisma = new PrismaClient();
 
 // Define interfaces for different response formats
 interface PriceData {
@@ -22,10 +11,13 @@ interface PriceData {
   last_updated: string;
 }
 
-// New interface for cash settlement format
-interface CashSettlementData {
-  cashSettlement: number;
-  dateTime: string;
+// New interface for average price data
+interface AveragePriceData {
+  averagePrice: number;
+  change: number;
+  changePercent: number;
+  lastUpdated: string;
+  dataPointsCount: number;
 }
 
 // Cache control headers to prevent browser caching
@@ -130,54 +122,55 @@ async function removeDuplicateRecords(metal: string) {
   }
 }
 
-// Function to save cash settlement data to LME_West_Metal_Price table
-async function saveLmeWestMetalPrice(price: number, dateTime: string): Promise<boolean> {
+// Function to calculate daily average price for today
+async function calculateDailyAverage(metal: string): Promise<AveragePriceData | null> {
   try {
-    // Format the date string properly
-    const date = new Date(dateTime).toISOString();
-    
-    // Save to LME_West_Metal_Price table using upsert to avoid duplicates
-    await prisma.lME_West_Metal_Price.upsert({
+    // Get today's date at start of day in UTC
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    // Find all records for today
+    const todayRecords = await prisma.metalPrice.findMany({
       where: {
-        date: date
+        metal,
+        lastUpdated: {
+          gte: today
+        }
       },
-      update: {
-        Price: price
-      },
-      create: {
-        date: date,
-        Price: price
+      orderBy: {
+        lastUpdated: 'asc'
       }
     });
-    
-    console.log(`Saved cash settlement data: ${price} at ${dateTime}`);
-    
-    // Trigger LME cash settlement calculation
-    try {
-      const calculationResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/lmecashcal`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          source: 'lme_west_update'
-        })
-      });
-      
-      if (calculationResponse.ok) {
-        console.log('LME cash settlement calculation triggered successfully');
-      } else {
-        console.warn('LME cash settlement calculation trigger failed:', 
-          await calculationResponse.text());
-      }
-    } catch (error) {
-      console.error('Error triggering LME cash settlement calculation:', error);
+
+    // If no records found for today, return null
+    if (todayRecords.length === 0) {
+      console.log('No records found for average calculation, returning null');
+      return null;
     }
+
+    // Calculate average price from database records
+    const totalPrice = todayRecords.reduce((sum, record) => sum + Number(record.spotPrice), 0);
+    const averagePrice = totalPrice / todayRecords.length;
+
+    // Get the first and most recent price to calculate change
+    const firstPrice = Number(todayRecords[0].spotPrice);
+    const latestRecord = todayRecords[todayRecords.length - 1];
+    const latestPrice = Number(latestRecord.spotPrice);
     
-    return true;
+    // Calculate change and change percent from first price of the day
+    const change = latestPrice - firstPrice;
+    const changePercent = (change / firstPrice) * 100;
+
+    return {
+      averagePrice,
+      change,
+      changePercent,
+      lastUpdated: latestRecord.lastUpdated.toISOString(),
+      dataPointsCount: todayRecords.length
+    };
   } catch (error) {
-    console.error('Error saving cash settlement data:', error);
-    return false;
+    console.error('Error calculating daily average:', error);
+    return null;
   }
 }
 
@@ -207,7 +200,7 @@ export default async function handler(
   }
   
   // Check if this is a history request
-  const { history, metal = 'aluminum', limit = 30 } = req.query;
+  const { history, metal = 'aluminum', limit = 30, forceMetalPrice = false, returnAverage = false } = req.query;
   
   if (history === 'true') {
     // Handle history request
@@ -223,6 +216,15 @@ export default async function handler(
         ],
         take: Number(limit)
       });
+      
+      // Return error if no history data
+      if (priceHistory.length === 0) {
+        return res.status(404).json({
+          type: 'noData',
+          error: 'No price history available in database',
+          message: 'No price history data found'
+        });
+      }
       
       // Transform decimal values to numbers for JSON response
       const formattedHistory = priceHistory.map(record => ({
@@ -247,92 +249,19 @@ export default async function handler(
       return;
     }
   }
-  
-  // Handle current price request
-  try {
-    // Use the backend server URL
-    const backendUrl = process.env.BACKEND_URL || 'http://148.135.138.22:3232';
-    const response = await fetch(`${backendUrl}/api/price-data`, {
-      // Add cache-busting parameter to prevent server-side caching
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch price data from backend: ${response.status} ${response.statusText}`);
-    }
-    
-    const rawData = await response.json();
-    
-    // Check which format the response is in
-    if ('is_cash_settlement' in rawData) {
-      // New data format with is_cash_settlement flag
-      if (rawData.is_cash_settlement === true && rawData.cash_settlement !== null) {
-        // Handle cash settlement data
-        await saveLmeWestMetalPrice(rawData.cash_settlement, rawData.last_updated);
-        
-        return res.status(200).json({
-          type: 'cashSettlement',
-          cashSettlement: rawData.cash_settlement,
-          dateTime: rawData.last_updated
-        });
-      } else if (rawData.spot_price !== null) {
-        // Handle spot price data when available
-        const lastUpdatedDate = new Date(rawData.last_updated);
-        
-        // Check if we already have a record with this timestamp AND price
-        const existingRecord = await prisma.metalPrice.findFirst({
-          where: {
-            metal: 'aluminum',
-            lastUpdated: lastUpdatedDate,
-            ...(rawData.spot_price !== null && { spotPrice: rawData.spot_price })
-          }
-        });
-        
-        let isNewRecord = false;
-        
-        // Only create a new record if one doesn't exist with this timestamp and price
-        if (!existingRecord && rawData.spot_price !== null) {
-          await prisma.metalPrice.create({
-            data: {
-              metal: 'aluminum',
-              spotPrice: rawData.spot_price,
-              change: rawData.price_change || 0,
-              changePercent: rawData.change_percentage || 0,
-              lastUpdated: lastUpdatedDate
-            }
-          });
-          console.log(`New price record created: ${rawData.spot_price} at ${rawData.last_updated}`);
-          isNewRecord = true;
-        } else {
-          console.log(`Skipped duplicate or null record at ${rawData.last_updated}`);
-        }
-        
-        // Run cleanup process as before
-        if (isNewRecord && (Math.random() < 0.1 || req.query.cleanup === 'true')) {
-          Promise.all([
-            removeDuplicateRecords('aluminum'),
-            cleanupOldRecords('aluminum', 100)
-          ]).catch(err => console.error('Background cleanup failed:', err));
-        }
-        
-        return res.status(200).json({
-          type: 'spotPrice',
-          spotPrice: rawData.spot_price,
-          change: rawData.price_change || 0,
-          changePercent: rawData.change_percentage || 0,
-          lastUpdated: rawData.last_updated
-        });
-      } else {
-        // Handle case when both spot_price and cash_settlement are null
-        console.log('Received data with null values:', JSON.stringify(rawData));
-        
-        // Try to get the latest price data from the database
+
+  // If forceMetalPrice is true, directly return data from the MetalPrice table
+  if (forceMetalPrice === 'true') {
+    try {
+      console.log(`Handling forceMetalPrice=true request for ${metal}`);
+      
+      // Check if we should bypass the database cache
+      const bypassCache = req.query._t !== undefined;
+      
+      if (!bypassCache) {
+        // Try to get from the database only
         const latestPrice = await prisma.metalPrice.findFirst({
-          where: { metal: 'aluminum' },
+          where: { metal: metal as string },
           orderBy: [
             { lastUpdated: 'desc' },
             { createdAt: 'desc' }
@@ -340,6 +269,7 @@ export default async function handler(
         });
         
         if (latestPrice) {
+          console.log(`Returning existing data from database: id=${latestPrice.id}, price=${latestPrice.spotPrice}, time=${latestPrice.lastUpdated}`);
           return res.status(200).json({
             type: 'spotPrice',
             spotPrice: Number(latestPrice.spotPrice),
@@ -347,126 +277,168 @@ export default async function handler(
             changePercent: Number(latestPrice.changePercent),
             lastUpdated: latestPrice.lastUpdated.toISOString()
           });
-        } else {
+        }
+      }
+      
+      // If we're bypassing the cache or there's no data in the database, try to fetch from the external API
+      try {
+        // Attempt to fetch fresh data from external source
+        const backendUrl = process.env.BACKEND_URL || 'http://148.135.138.22:3232';
+        const externalResponse = await fetch(`${backendUrl}/api/price-data`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        if (externalResponse.ok) {
+          const externalData = await externalResponse.json();
+          
+          // Check for different response formats and handle accordingly
+          let spotPrice, change, changePercent, lastUpdated;
+          let isCashSettlement = false;
+          
+          if (externalData.spot_price !== null) {
+            // Format from spot price data
+            spotPrice = externalData.spot_price;
+            change = externalData.price_change || 0;
+            changePercent = externalData.change_percentage || 0;
+            lastUpdated = externalData.last_updated;
+            isCashSettlement = false;
+          } else if (externalData.cash_settlement !== null || externalData.is_cash_settlement === true) {
+            // Format from cash settlement data
+            spotPrice = externalData.cash_settlement;
+            change = 0;  // No change data in cash settlement response
+            changePercent = 0;
+            lastUpdated = externalData.last_updated;
+            isCashSettlement = true;
+          } else {
+            // No usable data
+            throw new Error('No valid price data in response');
+          }
+          
+          // Only save to Metal_Price table if it's not cash settlement data
+          if (!isCashSettlement) {
+            // Save the fresh data to the database
+            await prisma.metalPrice.create({
+              data: {
+                metal: metal as string,
+                spotPrice: spotPrice,
+                change: change,
+                changePercent: changePercent,
+                lastUpdated: new Date(lastUpdated || new Date())
+              }
+            });
+          }
+          
+          // Return the fresh data
           return res.status(200).json({
-            type: 'noData',
-            message: 'No price data available'
+            type: 'spotPrice',
+            spotPrice: Number(spotPrice),
+            change: Number(change),
+            changePercent: Number(changePercent),
+            lastUpdated: lastUpdated || new Date().toISOString(),
+            fresh: true,
+            isCashSettlement: isCashSettlement
           });
         }
+      } catch (externalError) {
+        console.error('Error fetching from external API:', externalError);
       }
-    } else if ('cashSettlement' in rawData && 'dateTime' in rawData) {
-      // Handle original cash settlement format
-      const cashData = rawData as CashSettlementData;
       
-      // Save to LME_West_Metal_Price table
-      await saveLmeWestMetalPrice(cashData.cashSettlement, cashData.dateTime);
-      
-      // Return the data immediately to the frontend
-      return res.status(200).json({
-        type: 'cashSettlement',
-        cashSettlement: cashData.cashSettlement,
-        dateTime: cashData.dateTime
+      // No data in database, return error
+      console.log('No data available for spot price');
+      return res.status(404).json({
+        type: 'noData',
+        error: 'No data available',
+        message: 'No price data found'
       });
-    } else if ('spot_price' in rawData && 'price_change' in rawData) {
-      // Handle regular price data format
-      const data = rawData as PriceData;
-      const lastUpdatedDate = new Date(data.last_updated);
-      
-      // Adjust spotPrice calculation: spotPrice = spotPrice - (-change)
-      // Only apply this calculation if change is negative
-      const adjustedSpotPrice = data.price_change < 0 ? 
-        data.spot_price - (-data.price_change) : 
-        data.spot_price;
-      
-      // Check if we already have a record with this timestamp AND price
-      const existingRecord = await prisma.metalPrice.findFirst({
-        where: {
-          metal: 'aluminum',
-          lastUpdated: lastUpdatedDate,
-          ...(adjustedSpotPrice !== null && { spotPrice: adjustedSpotPrice })
-        }
+    } catch (error) {
+      console.error('Error fetching metal price data:', error);
+      return res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to retrieve metal price data"
       });
+    } finally {
+      await prisma.$disconnect();
+      return;
+    }
+  }
+  
+  // If returnAverage is true, calculate and return the daily average
+  if (returnAverage === 'true') {
+    try {
+      const averageData = await calculateDailyAverage(metal as string);
       
-      let isNewRecord = false;
-      
-      // Only create a new record if one doesn't exist with this timestamp and price
-      if (!existingRecord) {
-        // Skip creation if spotPrice is null
-        if (adjustedSpotPrice !== null) {
-          await prisma.metalPrice.create({
-            data: {
-              metal: 'aluminum',
-              spotPrice: adjustedSpotPrice,
-              change: data.price_change,
-              changePercent: data.change_percentage,
-              lastUpdated: lastUpdatedDate
-            }
-          });
-          console.log(`New price record created: ${adjustedSpotPrice} at ${data.last_updated}`);
-          isNewRecord = true;
-        } else {
-          console.log(`Skipped record creation due to null spotPrice at ${data.last_updated}`);
-        }
+      if (averageData) {
+        return res.status(200).json({
+          type: 'averagePrice',
+          spotPrice: averageData.averagePrice,
+          change: averageData.change,
+          changePercent: averageData.changePercent,
+          lastUpdated: averageData.lastUpdated,
+          dataPointsCount: averageData.dataPointsCount
+        });
       } else {
-        console.log(`Skipped duplicate record: ${adjustedSpotPrice} at ${data.last_updated}`);
+        // No average data available, return error
+        console.log('No average data available in database');
+        return res.status(404).json({
+          type: 'noData',
+          error: 'No average data available in database',
+          message: 'No daily price records found to calculate average'
+        });
       }
-      
-      // If we created a new record, run cleanup process periodically
-      // Randomly decide to run cleanup (1 in 10 chance) or if forced by query param
-      if (isNewRecord && (Math.random() < 0.1 || req.query.cleanup === 'true')) {
-        // Run the cleanup process but don't await it since the user doesn't need to wait for it
-        Promise.all([
-          removeDuplicateRecords('aluminum'),
-          cleanupOldRecords('aluminum', 100)
-        ]).catch(err => console.error('Background cleanup failed:', err));
-      }
-      
-      // Transform the data to match the frontend's expected format
-      const transformedData = {
+    } catch (error) {
+      console.error('Error fetching average price data:', error);
+      return res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to calculate average price"
+      });
+    } finally {
+      await prisma.$disconnect();
+      return;
+    }
+  }
+  
+  // For regular spot price request, get only from database
+  try {
+    console.log('Fetching spot price data from database only');
+    
+    // Get the latest price data from the database
+    const latestPrice = await prisma.metalPrice.findFirst({
+      where: { metal: 'aluminum' },
+      orderBy: [
+        { lastUpdated: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+    
+    if (latestPrice) {
+      console.log(`Using existing data from database: ${latestPrice.spotPrice} at ${latestPrice.lastUpdated}`);
+      return res.status(200).json({
         type: 'spotPrice',
-        spotPrice: adjustedSpotPrice,
-        change: data.price_change,
-        changePercent: data.change_percentage,
-        lastUpdated: data.last_updated
-      };
-      
-      return res.status(200).json(transformedData);
+        spotPrice: Number(latestPrice.spotPrice),
+        change: Number(latestPrice.change),
+        changePercent: Number(latestPrice.changePercent),
+        lastUpdated: latestPrice.lastUpdated.toISOString()
+      });
     } else {
-      // Unknown format
-      throw new Error(`Unknown data format received from backend: ${JSON.stringify(rawData)}`);
+      // No data in database, return error
+      console.log('No price data available in database');
+      return res.status(404).json({
+        type: 'noData',
+        error: 'No data available in database',
+        message: 'No price data found in database'
+      });
     }
   } catch (error) {
-    console.error('Error fetching or storing price data:', error);
+    console.error('Error fetching price data from database:', error);
     
-    // Try to get the latest price data from the database
-    try {
-      const latestPrice = await prisma.metalPrice.findFirst({
-        where: { metal: 'aluminum' },
-        orderBy: [
-          { lastUpdated: 'desc' },
-          { createdAt: 'desc' }
-        ]
-      });
-      
-      if (latestPrice) {
-        const dbData = {
-          type: 'spotPrice',
-          spotPrice: Number(latestPrice.spotPrice),
-          change: Number(latestPrice.change),
-          changePercent: Number(latestPrice.changePercent),
-          lastUpdated: latestPrice.lastUpdated.toISOString()
-        };
-        
-        return res.status(200).json(dbData);
-      }
-    } catch (dbError) {
-      console.error('Error retrieving data from database:', dbError);
-    }
-    
-    // If no database data is available, return an error status
-    res.status(503).json({ 
-      error: "Service temporarily unavailable", 
-      message: "No price data available at this time" 
+    // Return an error status
+    res.status(500).json({ 
+      error: "Internal server error", 
+      message: "Failed to retrieve price data from database" 
     });
   } finally {
     // Disconnect Prisma client

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import LiveSpotPriceCard from './LMECashSettlement';
+import LMECashSettlement from './LMECashSettlement';
 import axios from 'axios';
 
 interface LMECashSettlementData {
@@ -61,7 +61,7 @@ export default function LMECashSettlementGrid() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
       {cards.map((card) => (
-        <LiveSpotPriceCard
+        <LMECashSettlement
           key={card.cardIndex}
           priceName={card.cardLabel || `LME Cash Settlement ${card.cardIndex + 1}`}
           basePrice={card.price}

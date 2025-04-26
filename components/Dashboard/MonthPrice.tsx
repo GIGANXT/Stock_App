@@ -29,12 +29,28 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { addExpandedComponent } = useExpandedComponents();
+  const retryCountRef = useRef(0);
+  const maxRetries = 5;
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = async (isManualRefresh = false) => {
     try {
-      setIsRefreshing(true);
-      const res = await fetch('/api/price');
+      if (isManualRefresh) {
+        setIsRefreshing(true);
+      }
+      
+      // Add cache-busting parameter to prevent stale responses
+      const timestamp = new Date().getTime();
+      const res = await fetch(`/api/price?_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
       if (!res.ok) throw new Error('Failed to fetch data');
+      
       const data = await res.json();
       
       console.log('Received data from API:', data);
@@ -44,20 +60,98 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
       } else {
         setPriceData(data);
         setError(null);
+        // Reset retry count on successful fetch
+        retryCountRef.current = 0;
       }
     } catch (err) {
-      setError('Failed to fetch data');
       console.error('Error:', err);
+      
+      // Increment retry count
+      retryCountRef.current += 1;
+      
+      if (retryCountRef.current <= maxRetries) {
+        // Show a more informative error message
+        setError(`Connection issue. Retry ${retryCountRef.current}/${maxRetries}...`);
+      } else {
+        // After max retries, show a detailed message but keep the last valid data
+        setError('Connection lost. Please refresh manually.');
+        
+        // Stop automatic polling if we've reached max retries
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
     } finally {
-      setIsRefreshing(false);
+      if (isManualRefresh) {
+        setIsRefreshing(false);
+      }
       setIsLoading(false);
     }
   };
 
+  // Manual refresh handler that resets retry count
+  const handleManualRefresh = () => {
+    // Reset retry count when manually refreshing
+    retryCountRef.current = 0;
+    
+    // Restart polling if it was stopped
+    if (!pollIntervalRef.current) {
+      startPolling();
+    }
+    
+    fetchData(true);
+  };
+
+  // Function to start polling with longer interval (30 seconds instead of 5)
+  const startPolling = () => {
+    // Clear any existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+    
+    // Start a new polling interval - 30 seconds is more reasonable than 5 seconds
+    pollIntervalRef.current = setInterval(() => {
+      fetchData(false);
+    }, 30000); // 30 seconds
+  };
+
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    // Initial fetch
+    fetchData(false);
+    
+    // Start polling
+    startPolling();
+    
+    // Cleanup function
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Add visibility change listener to pause/resume polling when tab is hidden/visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Tab is active again, refresh data and restart polling
+        fetchData(false);
+        startPolling();
+      } else {
+        // Tab is hidden, pause polling to save resources
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Add click-away listener to close dropdown
@@ -127,7 +221,7 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchData}
+            onClick={handleManualRefresh}
             disabled={isRefreshing}
             className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full"
           >
@@ -262,7 +356,7 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={fetchData}
+              onClick={handleManualRefresh}
               disabled={isRefreshing}
               className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
             >

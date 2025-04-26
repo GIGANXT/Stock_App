@@ -317,16 +317,35 @@ const TopCards = () => {
               }
               
               /* Move contango section to match MCXAluminium */
-              .mcx-top-card-wrapper .mt-auto {
-                margin-top: auto !important;
-                padding-top: 2px !important;
-                padding-bottom: 2px !important;
+              .mcx-top-card-wrapper {
                 position: relative !important;
+              }
+              
+              .mcx-top-card-wrapper .mt-auto {
+                position: absolute !important;
+                bottom: 0.75rem !important;
+                left: 50% !important;
+                transform: translate(-50%, 0) !important;
+                width: 200px !important;  /* Fixed width instead of percentage */
+                padding: 2px 8px !important;
                 z-index: 10 !important;
-                width: 100% !important;
-                left: auto !important;
-                right: auto !important;
-                transform: none !important;
+              }
+              
+              /* Style the contango section */
+              .mcx-top-card-wrapper .text-center.py-1.px-2.mt-auto.rounded {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                min-width: 120px !important;
+                margin: 0 auto !important;
+              }
+
+              /* Ensure consistent positioning across screen sizes */
+              @media (min-width: 640px) {
+                .mcx-top-card-wrapper .mt-auto {
+                  bottom: 0.75rem !important;
+                  width: 200px !important;
+                }
               }
               
               /* Hide the expand button (the last button in the header) */

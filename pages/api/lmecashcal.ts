@@ -27,6 +27,12 @@ export default async function handler(
         return await handleSchedulerRequest(req, res);
       }
       
+      // Check if we have a cache-busting parameter
+      if (req.query._t !== undefined) {
+        // If we have a cache-busting parameter, recalculate the data
+        await calculateAndStoreLMECashSettlement();
+      }
+      
       // Standard GET request - retrieve LME cash settlements
       const lmeCashData = await (prisma as any).lMECashSettlement.findMany({
         orderBy: {

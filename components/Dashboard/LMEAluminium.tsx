@@ -43,18 +43,29 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
   const fetchPriceData = async () => {
     try {
       setIsRefreshing(true);
-      const response = await fetch('/api/metal-price');
+      const response = await fetch('/api/metal-price?returnAverage=false&forceMetalPrice=true');
       
       if (!response.ok) {
-        throw new Error('Failed to fetch price data');
+        if (response.status === 404) {
+          // Specifically handle case when no data exists in database
+          throw new Error('No price data available in database');
+        } else {
+          throw new Error(`Failed to fetch price data: ${response.status}`);
+        }
       }
       
       const data = await response.json();
+      
+      if (data.type === 'noData') {
+        // API returned success but with noData type
+        throw new Error(data.message || 'No price data available');
+      }
+      
       setPriceData(data);
       setError(null);
     } catch (err) {
       console.error('Error fetching price data:', err);
-      setError('Failed to load price data');
+      setError(err instanceof Error ? err.message : 'Failed to load price data');
     } finally {
       setIsRefreshing(false);
       setLoading(false);
@@ -64,8 +75,9 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
   useEffect(() => {
     fetchPriceData();
     
-    // Set up polling every 30 seconds
-    const intervalId = setInterval(fetchPriceData, 30000);
+    // Set up polling every minute for spot price
+    // Spot price can be refreshed a bit more frequently than average
+    const intervalId = setInterval(fetchPriceData, 60 * 1000);
     
     // Clean up interval on component unmount
     return () => clearInterval(intervalId);
@@ -257,14 +269,12 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
           </div>
         ) : error ? (
           <div className="relative z-10">
-            <p className="text-sm text-red-500 mb-1">{error}</p>
-            <div className="flex items-baseline gap-2">
-              <span className="font-mono font-bold text-3xl text-blue-600">
-                ${spotPrice.toFixed(2)}
-              </span>
-              <span className="text-gray-500">/MT</span>
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-2">
+              <p className="text-sm text-red-600 font-medium">{error}</p>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Using default values</p>
+            <div className="text-xs text-gray-500">
+              Please check if price data is available in the database
+            </div>
           </div>
         ) : (
           <>
