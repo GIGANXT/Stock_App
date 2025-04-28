@@ -4,8 +4,9 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import LiveSpotCard from "./LiveSpotCard";
 import LMECashSettlement from "./LMECashSettlement";
-import { Calendar, AlertTriangle } from "lucide-react";
+import { Calendar, AlertTriangle, BarChart2 } from "lucide-react";
 import { format } from "date-fns";
+import TodayLSP from "./todayLSP";
 
 interface LMECashSettlementSectionProps {
   title?: string;
@@ -98,6 +99,8 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
   const [lmeData, setLmeData] = useState<LMECashSettlementData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Add state for modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch LME Cash Settlement data from the API
   useEffect(() => {
@@ -284,10 +287,20 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(56,189,248,0.05)_0%,transparent_50%)]" />
 
       <div className="relative">
-        <div className="flex flex-col md:flex-row justify-between md:items-baseline mb-3 md:mb-4 gap-3">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base md:text-lg font-bold text-gray-800 flex items-center">
+            <BarChart2 className="w-5 h-5 mr-2 text-indigo-600" />
             {title}
           </h2>
+          
+          {/* Add the Today's LME Cash Settlement button */}
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-1.5 px-3 rounded-md transition-colors flex items-center"
+          >
+            <Calendar className="w-4 h-4 mr-1.5" />
+            Today's LME Cash Settlement
+          </button>
         </div>
 
         {/* Desktop View - Slider */}
@@ -544,6 +557,12 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
           </div>
         </div>
       </div>
+
+      {/* Add the modal component */}
+      <TodayLSP 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+      />
     </section>
   );
 } 

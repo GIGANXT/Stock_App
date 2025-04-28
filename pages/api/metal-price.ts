@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 // Response interface for properly typed API responses
 interface ApiResponse {
-  type: 'spotPrice' | 'averagePrice' | 'noData';
+  type: 'spotPrice' | 'averagePrice' | 'noData' | 'cashSettlement';
   spotPrice?: number;
   change?: number;
   changePercent?: number;
@@ -39,6 +39,16 @@ let responseCache: CacheData = {
   timestamp: 0,
   ttl: 5 * 60 * 1000, // 5 minutes cache TTL
 };
+
+// Additional interface for cash settlement data
+interface CashSettlementData {
+  value: number;
+  dateTime: string;
+  updatedAt: Date;
+}
+
+// In-memory storage for cash settlement data
+let cachedCashSettlement: CashSettlementData | null = null;
 
 // Function to check if data is stale and needs refresh
 function isDataStale(lastUpdated: Date): boolean {
@@ -402,6 +412,64 @@ async function calculateDailyAverage(metal: string): Promise<AveragePriceData | 
   }
 }
 
+// New function to save cash settlement data to database
+async function saveCashSettlementToDatabase(
+  price: number, 
+  dateTime: string
+): Promise<{ id: number; date: string; Price: number; createdAt: Date }> {
+  try {
+    // Use the full ISO date string with time component
+    let formattedDateTime: string;
+    try {
+      // Parse the date string into a Date object
+      const date = new Date(dateTime);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date provided:', dateTime);
+        // Fallback to current date and time if the provided date is invalid
+        formattedDateTime = new Date().toISOString();
+      } else {
+        formattedDateTime = date.toISOString();
+      }
+    } catch (error) {
+      console.error('Error parsing date:', error);
+      // Fallback to current date and time in case of any error
+      formattedDateTime = new Date().toISOString();
+    }
+    
+    console.log(`Saving price ${price} for date ${formattedDateTime}`);
+    
+    // Extract just the date part for the lookup (YYYY-MM-DD)
+    const datePart = formattedDateTime.split('T')[0];
+    
+    // Check if a record for this date already exists
+    const existingRecord = await prisma.lME_West_Metal_Price.findUnique({
+      where: { date: datePart }
+    });
+    
+    if (existingRecord) {
+      // Update existing record
+      return await prisma.lME_West_Metal_Price.update({
+        where: { date: datePart },
+        data: { 
+          Price: price,
+          date: formattedDateTime // Store the full ISO date with time
+        }
+      });
+    } else {
+      // Create a new record
+      return await prisma.lME_West_Metal_Price.create({
+        data: {
+          date: formattedDateTime, // Store the full ISO date with time
+          Price: price
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error saving cash settlement to database:', error);
+    throw error;
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -410,6 +478,228 @@ export default async function handler(
   res.setHeader('Cache-Control', noCacheHeaders['Cache-Control']);
   res.setHeader('Pragma', noCacheHeaders['Pragma']);
   res.setHeader('Expires', noCacheHeaders['Expires']);
+  
+  // Endpoint to add a new cash settlement price record
+  if (req.query.addCashSettlement === 'true') {
+    // Only allow POST requests for database updates
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed', message: 'Only POST requests are allowed for database updates' });
+    }
+    
+    // IMPORTANT: Add authentication here
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey || apiKey !== process.env.API_UPDATE_KEY) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Valid API key required for database updates' });
+    }
+    
+    try {
+      const { price, date } = req.body;
+      
+      if (!price || !date) {
+        return res.status(400).json({ error: 'Bad request', message: 'price and date are required fields' });
+      }
+      
+      // Check if a record for this date already exists
+      const existingRecord = await prisma.lME_West_Metal_Price.findUnique({
+        where: { date }
+      });
+      
+      if (existingRecord) {
+        // If it exists, update it
+        const updatedRecord = await prisma.lME_West_Metal_Price.update({
+          where: { date },
+          data: { Price: Number(price) }
+        });
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Cash settlement price updated',
+          data: updatedRecord
+        });
+      } else {
+        // Create a new record
+        const newRecord = await prisma.lME_West_Metal_Price.create({
+          data: {
+            date,
+            Price: Number(price)
+          }
+        });
+        
+        return res.status(201).json({
+          success: true,
+          message: 'Cash settlement price added',
+          data: newRecord
+        });
+      }
+    } catch (error) {
+      console.error('Error adding cash settlement data:', error);
+      return res.status(500).json({ error: 'Internal server error', message: 'Failed to add cash settlement data' });
+    } finally {
+      await prisma.$disconnect();
+      return;
+    }
+  }
+  
+  // Check if this is a request to update cash settlement data (legacy endpoint kept for compatibility)
+  if (req.query.updateCashSettlement === 'true') {
+    // Only allow POST requests for updates
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed', message: 'Only POST requests are allowed for updates' });
+    }
+    
+    // IMPORTANT: Add authentication here
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey || apiKey !== process.env.API_UPDATE_KEY) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Valid API key required for updates' });
+    }
+    
+    try {
+      const { cashSettlement, dateTime } = req.body;
+      
+      if (cashSettlement === undefined || cashSettlement === null) {
+        return res.status(400).json({ error: 'Bad request', message: 'cashSettlement is required' });
+      }
+      
+      // Update cached cash settlement data
+      cachedCashSettlement = {
+        value: Number(cashSettlement),
+        dateTime: dateTime || new Date().toISOString(),
+        updatedAt: new Date()
+      };
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Cash settlement data updated',
+        data: cachedCashSettlement
+      });
+    } catch (error) {
+      console.error('Error updating cash settlement data:', error);
+      return res.status(500).json({ error: 'Internal server error', message: 'Failed to update cash settlement data' });
+    }
+  }
+  
+  // Special case for Today's LME Cash Settlement data
+  if (req.query.getCashSettlement === 'true') {
+    try {
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0];
+
+      // Check for a force refresh parameter
+      const forceRefresh = req.query._forceRefresh === 'true';
+      console.log('Cash settlement request received, forceRefresh:', forceRefresh);
+
+      // If we're forcing a refresh or have a timestamp, always try to fetch new data from external API first
+      if (forceRefresh || req.query._t) {
+        try {
+          console.log('Attempting to fetch fresh data from external API');
+          const externalData = await fetchExternalPriceData();
+          
+          // Check if we have cash settlement data from external API
+          if (externalData.cash_settlement !== null && externalData.cash_settlement !== undefined) {
+            // We have data from external API, save it to database with current timestamp
+            const price = Number(externalData.cash_settlement);
+            const dateTime = new Date().toISOString(); // Use current time for freshness
+            
+            // Save to database
+            const savedRecord = await saveCashSettlementToDatabase(price, dateTime);
+            console.log('Saved new cash settlement data to database:', savedRecord);
+            
+            // Return the data we just saved
+            return res.status(200).json({
+              type: 'cashSettlement',
+              cashSettlement: price,
+              dateTime: savedRecord.date, // Use the stored date from the saved record
+              source: 'LME',
+              success: true,
+              fromExternalApi: true,
+              fresh: true
+            });
+          }
+        } catch (apiError) {
+          console.error('Failed to fetch from external API:', apiError);
+          // Continue to database fallback
+        }
+      }
+
+      // First try to get data from the database for today
+      // We need to find records where the date part matches today
+      const todaySettlements = await prisma.lME_West_Metal_Price.findMany({
+        where: { 
+          date: {
+            startsWith: formattedDate
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: 1
+      });
+
+      // If data for today exists, return it
+      if (todaySettlements && todaySettlements.length > 0) {
+        const todaySettlement = todaySettlements[0];
+        console.log('Returning today\'s settlement data from database:', todaySettlement);
+        
+        return res.status(200).json({
+          type: 'cashSettlement',
+          cashSettlement: todaySettlement.Price,
+          dateTime: todaySettlement.date, // Using the full ISO date
+          source: 'LME',
+          success: true,
+          fromDatabase: true
+        });
+      }
+
+      // If no data for today, try to fetch from external API as a fallback
+      try {
+        console.log('No data in database, attempting to fetch from external API');
+        const externalData = await fetchExternalPriceData();
+        
+        // Check if we have cash settlement data from external API
+        if (externalData.cash_settlement !== null && externalData.cash_settlement !== undefined) {
+          // We have data from external API, save it to database
+          const price = Number(externalData.cash_settlement);
+          const dateTime = new Date().toISOString(); // Use current time for freshness
+          
+          // Save to database
+          const savedRecord = await saveCashSettlementToDatabase(price, dateTime);
+          console.log('Saved new cash settlement data to database:', savedRecord);
+          
+          // Return the data we just saved
+          return res.status(200).json({
+            type: 'cashSettlement',
+            cashSettlement: price,
+            dateTime: savedRecord.date, // Use the stored date from the saved record
+            source: 'LME',
+            success: true,
+            fromExternalApi: true
+          });
+        }
+      } catch (apiError) {
+        console.error('Failed to fetch from external API:', apiError);
+        // Continue to fallback options
+      }
+
+      // If we reach here, there's no data for today - return a "no data" response
+      return res.status(404).json({
+        type: 'noData',
+        success: false,
+        message: 'No cash settlement data available for today'
+      });
+      
+    } catch (error) {
+      console.error('Error fetching cash settlement data:', error);
+      return res.status(500).json({
+        type: 'noData',
+        error: 'Server error',
+        message: 'Failed to fetch cash settlement data',
+        success: false
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
   
   // Check if this is a database update request - only allow POST method
   if (req.query.updateDatabase === 'true') {
