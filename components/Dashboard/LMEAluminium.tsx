@@ -43,7 +43,8 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
   const fetchPriceData = async () => {
     try {
       setIsRefreshing(true);
-      const response = await fetch('/api/metal-price?returnAverage=false&forceMetalPrice=true');
+      // Allow forceMetalPrice to get fresh data when needed, but still save to database
+      const response = await fetch('/api/metal-price?forceMetalPrice=true');
       
       if (!response.ok) {
         if (response.status === 404) {

@@ -35,7 +35,7 @@ export default function LiveSpotCard({
     change = 13.00,
     changePercent = 0.48,
     unit = '/MT',
-    apiUrl = '/api/metal-price?returnAverage=true',
+    apiUrl = '/api/metal-price?forceMetalPrice=true',
     title = ""
 }: LiveSpotCardProps) {
     const [priceData, setPriceData] = useState<ApiResponse | null>(null);
