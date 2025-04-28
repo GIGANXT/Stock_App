@@ -183,6 +183,86 @@ export default async function handler(
   res.setHeader('Pragma', noCacheHeaders['Pragma']);
   res.setHeader('Expires', noCacheHeaders['Expires']);
   
+  // Check if this is a database update request - only allow POST method
+  if (req.query.updateDatabase === 'true') {
+    // Only allow POST requests for database updates
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed', message: 'Only POST requests are allowed for database updates' });
+    }
+    
+    // IMPORTANT: Add authentication here
+    // This is a simplified check - implement proper authentication in production
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey || apiKey !== process.env.API_UPDATE_KEY) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Valid API key required for database updates' });
+    }
+    
+    try {
+      const { metal = 'aluminum', spotPrice, change, changePercent, lastUpdated } = req.body;
+      
+      if (!spotPrice) {
+        return res.status(400).json({ error: 'Bad request', message: 'spotPrice is required' });
+      }
+      
+      // Format date from string or use current date
+      const formattedDate = lastUpdated ? new Date(lastUpdated) : new Date();
+      
+      // Check if this data already exists to prevent duplicates
+      const existingRecord = await prisma.metalPrice.findFirst({
+        where: {
+          metal: metal as string,
+          lastUpdated: formattedDate
+        }
+      });
+      
+      if (existingRecord) {
+        console.log('Record with same timestamp already exists, skipping');
+        return res.status(200).json({ 
+          success: false, 
+          message: 'Duplicate record with same timestamp exists',
+          existingRecord: {
+            id: existingRecord.id,
+            spotPrice: Number(existingRecord.spotPrice),
+            lastUpdated: existingRecord.lastUpdated.toISOString()
+          }
+        });
+      }
+      
+      // Save new record to database
+      const newRecord = await prisma.metalPrice.create({
+        data: {
+          metal: metal as string,
+          spotPrice: Number(spotPrice),
+          change: Number(change || 0),
+          changePercent: Number(changePercent || 0),
+          lastUpdated: formattedDate
+        }
+      });
+      
+      console.log(`Added new price record: ${metal}, ${spotPrice}, ${formattedDate}`);
+      
+      return res.status(201).json({
+        success: true,
+        message: 'Price data added to database',
+        record: {
+          id: newRecord.id,
+          metal: newRecord.metal,
+          spotPrice: Number(newRecord.spotPrice),
+          change: Number(newRecord.change),
+          changePercent: Number(newRecord.changePercent),
+          lastUpdated: newRecord.lastUpdated.toISOString(),
+          createdAt: newRecord.createdAt.toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Error updating database:', error);
+      return res.status(500).json({ error: 'Internal server error', message: 'Failed to update database' });
+    } finally {
+      await prisma.$disconnect();
+      return;
+    }
+  }
+  
   // Check if this is a cleanup request
   if (req.query.forcecleanup === 'true') {
     try {
@@ -318,67 +398,11 @@ export default async function handler(
             throw new Error('No valid price data in response');
           }
           
-          // Only save to Metal_Price table if it's not cash settlement data
-          if (!isCashSettlement) {
-            // Check if this data already exists in the database to prevent duplicates
-            const formattedDate = new Date(lastUpdated || new Date());
-            
-            // First check: Look for any record with the same timestamp
-            const existingRecordByTime = await prisma.metalPrice.findFirst({
-              where: {
-                metal: metal as string,
-                lastUpdated: formattedDate
-              }
-            });
-            
-            // Second check: Look for any record with the same price created recently (within last 30 minutes)
-            const thirtyMinutesAgo = new Date();
-            thirtyMinutesAgo.setMinutes(thirtyMinutesAgo.getMinutes() - 30);
-            
-            const existingRecordByPrice = await prisma.metalPrice.findFirst({
-              where: {
-                metal: metal as string,
-                spotPrice: spotPrice,
-                createdAt: {
-                  gte: thirtyMinutesAgo
-                }
-              }
-            });
-            
-            // Third check: Look for any record created very recently (within last 5 minutes)
-            const fiveMinutesAgo = new Date();
-            fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
-            
-            const recentRecord = await prisma.metalPrice.findFirst({
-              where: {
-                metal: metal as string,
-                createdAt: {
-                  gte: fiveMinutesAgo
-                }
-              },
-              orderBy: {
-                createdAt: 'desc'
-              }
-            });
-            
-            // Only save if no similar record exists by any of our criteria
-            if (!existingRecordByTime && !existingRecordByPrice && !recentRecord) {
-              console.log('Saving new price data to database');
-              await prisma.metalPrice.create({
-                data: {
-                  metal: metal as string,
-                  spotPrice: spotPrice,
-                  change: change,
-                  changePercent: changePercent,
-                  lastUpdated: formattedDate
-                }
-              });
-            } else {
-              console.log('Skipping duplicate record - similar data already exists in database');
-            }
-          }
+          // REMOVING DATABASE WRITE OPERATION
+          // We no longer save external data to the database when requested through the client
+          // This ensures the database is only updated through proper API channels
           
-          // Return the fresh data
+          // Return the fresh data without saving to database
           return res.status(200).json({
             type: 'spotPrice',
             spotPrice: Number(spotPrice),
