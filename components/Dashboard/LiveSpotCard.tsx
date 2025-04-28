@@ -26,6 +26,7 @@ interface ApiResponse {
     dateTime?: string;
     message?: string;
     dataPointsCount?: number;
+    averagePrice?: number; // Added to support average price data
 }
 
 export default function LiveSpotCard({
@@ -96,9 +97,12 @@ export default function LiveSpotCard({
         ? parseISO(priceData.lastUpdated) 
         : (lastUpdated || new Date());
     
-    const currentSpotPrice = priceData?.spotPrice !== undefined
-        ? priceData.spotPrice 
-        : spotPrice;
+    // Prioritize average price when available (for averagePrice type)
+    const currentSpotPrice = priceData?.type === 'averagePrice' && priceData?.averagePrice !== undefined
+        ? priceData.averagePrice
+        : priceData?.spotPrice !== undefined
+            ? priceData.spotPrice 
+            : spotPrice;
         
     const currentChange = priceData?.change !== undefined
         ? priceData.change 
@@ -163,7 +167,9 @@ export default function LiveSpotCard({
                                 <span className="font-mono text-xl md:text-2xl font-bold text-indigo-600">
                                     ${currentSpotPrice.toFixed(2)}
                                 </span>
-                                <span className="text-xs text-gray-500">{unit}</span>
+                                <span className="text-xs text-gray-500">
+                                    {isAveragePrice ? 'Average' : ''}{unit}
+                                </span>
                             </div>
 
                             <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-1.5 md:mt-2 font-medium`}>
@@ -171,6 +177,9 @@ export default function LiveSpotCard({
                                 <span className="whitespace-nowrap crisp-text">
                                     {isIncrease ? '+' : ''}{currentChangePercent.toFixed(2)}%
                                 </span>
+                                {isAveragePrice && (
+                                    <span className="text-xs text-gray-500 ml-1">(first to latest)</span>
+                                )}
                             </div>
                             
                             {priceData?.message && (

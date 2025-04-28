@@ -41,11 +41,12 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
   const [showAddOptions, setShowAddOptions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [rbiRate, setRbiRate] = useState<number | null>(null);
   const [sbiRate, setSbiRate] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rbiUpdated, setRbiUpdated] = useState<Date>(new Date());
   const { addExpandedComponent } = useExpandedComponents();
 
   // Add click-away listener to close dropdown
@@ -75,10 +76,19 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       if (result.data && result.data.length > 0) {
         const rate = parseFloat(result.data[0].rate);
         setRbiRate(rate); // Convert string to number
-        setLastUpdated(new Date());
+        
+        // Set RBI update date if available in the response
+        if (result.data[0].date) {
+          setRbiUpdated(new Date(result.data[0].date));
+        } else {
+          setRbiUpdated(new Date());
+        }
         
         // Update shared rates
         updateSharedRates(rate, null);
+        
+        // Clear any previous errors
+        setError(null);
       }
     } catch (error) {
       console.error("Error fetching RBI rate:", error);
@@ -107,17 +117,18 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         const rate = parseFloat(result.data[0].sbi_tt_sell);
         setSbiRate(rate); // Convert string to number
         
+        // Set SBI update date if available in the response
+        if (result.data[0].date) {
+          setLastUpdated(new Date(result.data[0].date));
+        } else {
+          setLastUpdated(new Date());
+        }
+        
         // Update shared rates
         updateSharedRates(null, rate);
         
-        // If data is from database, show a message
-        if (result.source === "database") {
-          console.log("⚠️ Using cached data from database");
-          setError("Using cached SBI rate due to API unavailability");
-        } else {
-          console.log("✅ Using live data from API");
-          setError(null);
-        }
+        // Clear any previous errors
+        setError(null);
       }
     } catch (error) {
       console.error("🚨 Error fetching SBI rate:", error);
@@ -156,9 +167,10 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
   const RateSection = ({ isRBI = true, expanded = false }) => {
     const rate = isRBI ? rbiRate : sbiRate;
     const label = isRBI ? "RBI Rate" : "SBI Rate";
+    const updateDate = isRBI ? rbiUpdated : lastUpdated;
 
     return (
-      <div className={expanded ? "space-y-4" : "space-y-3"}>
+      <div className={expanded ? "space-y-4" : "space-y-2"}>
         <div className="flex items-center justify-between">
           <span
             className={`font-medium text-gray-700 ${
@@ -195,8 +207,19 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
             /USD
           </span>
         </div>
-
-        {isRBI && <div className="h-[24px]"></div>}
+        
+        {updateDate && (
+          <div className="flex items-center justify-between w-full">
+            <div className="text-xs text-gray-500 flex items-center gap-1">
+              <span>Updated: {format(updateDate, "MMM d")}</span>
+            </div>
+            {error && error.includes("cached") && (
+              <div className="text-xs text-yellow-600 flex items-center gap-1">
+                <span>⚠️ Using cached data</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -224,7 +247,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
                 <span className="text-gray-500 text-sm">/USD</span>
               </div>
               <div className="text-xs text-gray-500 mt-2">
-                Updated daily by Reserve Bank of India
+                {rbiUpdated ? `Updated at: ${format(rbiUpdated, "dd-MMMM-yyyy")}` : "Updated daily by Reserve Bank of India"}
               </div>
             </div>
 
@@ -240,13 +263,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
                 <span className="text-gray-500 text-sm">/USD</span>
               </div>
               <div className="text-xs text-gray-500 mt-2">
-                {error && error.includes("cached") ? (
-                  <div className="flex items-center gap-1 text-yellow-600">
-                    <span>⚠️ Using cached data</span>
-                  </div>
-                ) : (
-                  "Real-time TT selling rate from SBI"
-                )}
+                <span>Updated at: {format(lastUpdated, "dd-MMMM-yyyy")}</span>
               </div>
             </div>
           </div>
@@ -269,19 +286,6 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
               <p className="text-xs text-gray-600">
                 Margin: ₹{(sbiRate && rbiRate) ? (sbiRate - rbiRate).toFixed(4) : "..."} | This spread typically widens during market volatility and narrows in stable periods.
               </p>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-200 pt-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <span>Last updated: {format(lastUpdated, "HH:mm:ss, dd MMM")}</span>
-              </div>
-              {error && !error.includes("cached") && (
-                <div className="text-xs text-red-600 flex items-center gap-1">
-                  {error}
-                </div>
-              )}
             </div>
           </div>
         </>
@@ -464,56 +468,86 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       <div
         className={`relative bg-white rounded-xl p-4 border border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-200 min-h-[300px] group ${className}`}
       >
-        {/* Glow effect on hover - desktop only */}
-        <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none bg-gradient-to-br from-blue-50/30 via-purple-50/30 to-pink-50/30 hidden sm:block"></div>
-
-        <div className="flex items-center justify-between mb-4 relative z-10">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-              <Banknote className="w-4 h-4 text-purple-600" />
-              Exchange Rates
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-              aria-label="Refresh rates"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 ${
-                  isRefreshing ? "animate-spin" : ""
-                }`}
-              />
-            </button>
-            <button
-              onClick={() => addExpandedComponent('RatesDisplay')}
-              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
-              aria-label="Expand view"
-            >
-              <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-col h-[calc(100%-4rem)] relative z-10">
-          <div className="flex-1 flex flex-col justify-evenly">
-            <RateSection isRBI={true} />
-            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent my-2" />
-            <RateSection isRBI={false} />
+        {/* Removed glow effect */}
+        
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+                <Banknote className="w-4 h-4 text-purple-600" />
+                Exchange Rates
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRefresh}
+                className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="Refresh rates"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 ${
+                    isRefreshing ? "animate-spin" : ""
+                  }`}
+                />
+              </button>
+              <button
+                onClick={() => addExpandedComponent('RatesDisplay')}
+                className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
+                aria-label="Expand view"
+              >
+                <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="pt-3 border-t border-gray-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <RefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>Updated: {format(lastUpdated, "MMM d, HH:mm")}</span>
-              </div>
-              {error && (
-                <div className="text-xs text-yellow-600 flex items-center gap-1">
-                  {error.includes("cached") ? "⚠️ Using cached data" : error}
+          {/* Content */}
+          <div className="flex-1 flex flex-col justify-between">
+            {/* Rates */}
+            <div className="flex-1 flex flex-col">
+              <div className="mb-8">
+                {/* RBI Rate */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-700 text-sm">RBI Rate</span>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="font-mono font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent text-3xl">
+                      ₹{rbiRate !== null ? rbiRate.toFixed(4) : "Loading..."}
+                    </span>
+                    <span className="text-gray-500 text-xs">/USD</span>
+                  </div>
+                  {rbiUpdated && (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <span>Updated at: {format(rbiUpdated, "dd-MMMM-yyyy")}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+
+              <div>
+                {/* SBI Rate */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-700 text-sm">SBI Rate</span>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="font-mono font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent text-3xl">
+                      ₹{sbiRate !== null ? sbiRate.toFixed(4) : "Loading..."}
+                    </span>
+                    <span className="text-gray-500 text-xs">/USD</span>
+                  </div>
+                  {lastUpdated && (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <span>Updated at: {format(lastUpdated, "dd-MMMM-yyyy")}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -521,3 +555,4 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
     </>
   );
 }
+

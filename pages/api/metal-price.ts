@@ -320,16 +320,62 @@ export default async function handler(
           
           // Only save to Metal_Price table if it's not cash settlement data
           if (!isCashSettlement) {
-            // Save the fresh data to the database
-            await prisma.metalPrice.create({
-              data: {
+            // Check if this data already exists in the database to prevent duplicates
+            const formattedDate = new Date(lastUpdated || new Date());
+            
+            // First check: Look for any record with the same timestamp
+            const existingRecordByTime = await prisma.metalPrice.findFirst({
+              where: {
                 metal: metal as string,
-                spotPrice: spotPrice,
-                change: change,
-                changePercent: changePercent,
-                lastUpdated: new Date(lastUpdated || new Date())
+                lastUpdated: formattedDate
               }
             });
+            
+            // Second check: Look for any record with the same price created recently (within last 30 minutes)
+            const thirtyMinutesAgo = new Date();
+            thirtyMinutesAgo.setMinutes(thirtyMinutesAgo.getMinutes() - 30);
+            
+            const existingRecordByPrice = await prisma.metalPrice.findFirst({
+              where: {
+                metal: metal as string,
+                spotPrice: spotPrice,
+                createdAt: {
+                  gte: thirtyMinutesAgo
+                }
+              }
+            });
+            
+            // Third check: Look for any record created very recently (within last 5 minutes)
+            const fiveMinutesAgo = new Date();
+            fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+            
+            const recentRecord = await prisma.metalPrice.findFirst({
+              where: {
+                metal: metal as string,
+                createdAt: {
+                  gte: fiveMinutesAgo
+                }
+              },
+              orderBy: {
+                createdAt: 'desc'
+              }
+            });
+            
+            // Only save if no similar record exists by any of our criteria
+            if (!existingRecordByTime && !existingRecordByPrice && !recentRecord) {
+              console.log('Saving new price data to database');
+              await prisma.metalPrice.create({
+                data: {
+                  metal: metal as string,
+                  spotPrice: spotPrice,
+                  change: change,
+                  changePercent: changePercent,
+                  lastUpdated: formattedDate
+                }
+              });
+            } else {
+              console.log('Skipping duplicate record - similar data already exists in database');
+            }
           }
           
           // Return the fresh data
@@ -444,4 +490,4 @@ export default async function handler(
     // Disconnect Prisma client
     await prisma.$disconnect();
   }
-} 
+}

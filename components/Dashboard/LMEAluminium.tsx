@@ -75,9 +75,9 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
   useEffect(() => {
     fetchPriceData();
     
-    // Set up polling every minute for spot price
-    // Spot price can be refreshed a bit more frequently than average
-    const intervalId = setInterval(fetchPriceData, 60 * 1000);
+    // Reduce polling frequency to every 15 minutes instead of every minute
+    // This will significantly reduce the number of database entries
+    const intervalId = setInterval(fetchPriceData, 15 * 60 * 1000);
     
     // Clean up interval on component unmount
     return () => clearInterval(intervalId);

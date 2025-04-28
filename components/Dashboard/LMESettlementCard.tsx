@@ -1,8 +1,7 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, Calendar, DollarSign } from 'lucide-react';
 
-interface LMECashSettlementProps {
-  priceName?: string;
+interface LMESettlementCardProps {
   basePrice?: number;
   spread?: number;
   spreadINR?: string;
@@ -10,14 +9,13 @@ interface LMECashSettlementProps {
   formattedDate?: string;
 }
 
-export default function LMECashSettlement({
-  priceName = "",
+export default function LMESettlementCard({
   basePrice = 2650,
   spread = 40,
   spreadINR = '3350.00',
   isIncrease = true,
   formattedDate = '30. May 2023'
-}: LMECashSettlementProps) {
+}: LMESettlementCardProps) {
   const totalPrice = basePrice;
   const trendColor = isIncrease ? "text-green-600" : "text-red-600";
   const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
@@ -63,7 +61,7 @@ export default function LMECashSettlement({
             <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-1.5 md:mt-2 font-medium`}>
               <TrendIcon className="w-4 h-4 flex-shrink-0 crisp-text" />
               <span className="whitespace-nowrap crisp-text">
-                {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
+                {isIncrease ? '+' : ''}{spread.toFixed(2)}
               </span>
             </div>
           </div>
@@ -81,4 +79,4 @@ export default function LMECashSettlement({
       </div>
     </div>
   );
-}
+} 

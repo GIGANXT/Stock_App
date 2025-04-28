@@ -12,7 +12,6 @@ type ApiResponse = {
     sbi_tt_buy: string | null;
     timestamp: string;
   }[];
-  source?: 'api' | 'database';
   error?: string;
 };
 
@@ -22,7 +21,6 @@ export default async function handler(
 ) {
   try {
     let data: ApiResponse['data'];
-    let fromDatabase = false;
 
     // Try fetching from the external API first
     try {
@@ -94,7 +92,6 @@ export default async function handler(
             sbi_tt_buy: null,
             timestamp: latestRate.date.toISOString()
           }];
-          fromDatabase = true;
         } else {
           throw new Error("No data available from external API or database");
         }
@@ -106,8 +103,7 @@ export default async function handler(
 
     res.status(200).json({ 
       success: true, 
-      data, 
-      source: fromDatabase ? "database" : "api" 
+      data
     });
   } catch (error: unknown) {
     console.error("🚨 Final error in SBI TT API:", error);
