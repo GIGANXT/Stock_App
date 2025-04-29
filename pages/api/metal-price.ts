@@ -73,8 +73,12 @@ interface ExternalApiData {
 // Service function to fetch data from external API
 async function fetchExternalPriceData(): Promise<ExternalApiData> {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://148.135.138.22:3232';
-    const response = await fetch(`${backendUrl}/api/price-data`, {
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3232';
+    const apiEndpoint = `${backendUrl}/api/price-data`;
+    
+    console.log(`Attempting to fetch data from external API: ${apiEndpoint}`);
+    
+    const response = await fetch(apiEndpoint, {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache',
@@ -83,10 +87,13 @@ async function fetchExternalPriceData(): Promise<ExternalApiData> {
     });
     
     if (!response.ok) {
-      throw new Error(`External API returned status ${response.status}`);
+      const errorText = await response.text();
+      console.error(`External API returned status ${response.status}: ${errorText}`);
+      throw new Error(`External API returned status ${response.status}: ${errorText}`);
     }
     
     const data: ExternalApiData = await response.json();
+    console.log('Successfully fetched external API data:', JSON.stringify(data));
     return data;
   } catch (error) {
     console.error('Error fetching from external API:', error);
@@ -105,30 +112,43 @@ interface ProcessedApiData {
 
 // Service function to process external API data into our format
 function processExternalData(externalData: ExternalApiData): ProcessedApiData {
-  if (externalData.spot_price !== null && externalData.spot_price !== undefined) {
-    // Format from spot price data
-    return {
-      spotPrice: externalData.spot_price,
-      change: externalData.price_change || 0,
-      changePercent: externalData.change_percentage || 0,
-      lastUpdated: externalData.last_updated || new Date().toISOString(),
-      isCashSettlement: false
-    };
-  } else if (
-    (externalData.cash_settlement !== null && externalData.cash_settlement !== undefined) || 
-    externalData.is_cash_settlement === true
-  ) {
-    // Format from cash settlement data
-    return {
-      spotPrice: externalData.cash_settlement || 0,
-      change: 0,  // No change data in cash settlement response
-      changePercent: 0,
-      lastUpdated: externalData.last_updated || new Date().toISOString(),
-      isCashSettlement: true
-    };
-  } else {
-    throw new Error('No valid price data in response');
+  console.log('Processing external data:', JSON.stringify(externalData));
+  
+  // Validate spot price
+  const spotPrice = externalData.spot_price !== null && externalData.spot_price !== undefined
+    ? Number(externalData.spot_price)
+    : (externalData.cash_settlement !== null && externalData.cash_settlement !== undefined
+      ? Number(externalData.cash_settlement)
+      : 0);
+      
+  if (spotPrice === 0) {
+    console.error('No valid price data found in API response');
   }
+  
+  // Detect if this is cash settlement data
+  const isCashSettlement = Boolean(
+    externalData.is_cash_settlement || 
+    (externalData.cash_settlement !== null && externalData.cash_settlement !== undefined)
+  );
+  
+  // Extract change data with fallbacks
+  const change = externalData.price_change !== undefined ? Number(externalData.price_change) : 0;
+  const changePercent = externalData.change_percentage !== undefined ? Number(externalData.change_percentage) : 0;
+  
+  // Ensure we have a valid date
+  const lastUpdated = externalData.last_updated && externalData.last_updated.trim() !== '' 
+    ? externalData.last_updated 
+    : new Date().toISOString();
+  
+  console.log(`Processed data: spotPrice=${spotPrice}, change=${change}, changePercent=${changePercent}, lastUpdated=${lastUpdated}, isCashSettlement=${isCashSettlement}`);
+  
+  return {
+    spotPrice,
+    change,
+    changePercent,
+    lastUpdated,
+    isCashSettlement
+  };
 }
 
 // Type definition for database record with support for Prisma Decimal type
@@ -185,8 +205,56 @@ async function savePriceToDatabase(
 
 // Function to get latest price with auto-refresh when stale
 async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = false): Promise<ApiResponse> {
+  console.log(`getLatestPriceWithRefresh called for ${metal}, forceRefresh=${forceRefresh}`);
+  
   try {
-    // First get from database
+    // If force refresh is requested, always try to fetch new data first
+    if (forceRefresh) {
+      console.log('Force refresh requested, fetching from external API first');
+      try {
+        // Get fresh data from external API
+        const externalData = await fetchExternalPriceData();
+        
+        console.log('External data received:', JSON.stringify(externalData));
+        
+        if (!externalData) {
+          throw new Error('External API returned empty data');
+        }
+        
+        // Process the data
+        const { spotPrice, change, changePercent, lastUpdated } = processExternalData(externalData);
+        
+        console.log(`Processed data: spotPrice=${spotPrice}, change=${change}, changePercent=${changePercent}`);
+        
+        // Always save to database when forcing refresh, regardless of settings
+        const formattedDate = new Date(lastUpdated || new Date());
+        
+        try {
+          console.log(`Explicitly saving to database: metal=${metal}, price=${spotPrice}, date=${formattedDate}`);
+          await savePriceToDatabase(metal, spotPrice, change, changePercent, formattedDate);
+          console.log('Successfully saved new price data to database');
+        } catch (saveErr) {
+          console.error('Error saving to database:', saveErr);
+          // Continue even if save fails
+        }
+        
+        // Return the fresh data immediately
+        return {
+          type: 'spotPrice',
+          spotPrice: Number(spotPrice),
+          change: Number(change),
+          changePercent: Number(changePercent),
+          lastUpdated: formattedDate.toISOString(),
+          fresh: true,
+          source: 'external'
+        };
+      } catch (apiError) {
+        console.error('External API error during force refresh:', apiError);
+        // Continue to database query below
+      }
+    }
+    
+    // Get from database
     const latestPrice = await prisma.metalPrice.findFirst({
       where: { metal },
       orderBy: [
@@ -195,40 +263,61 @@ async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = 
       ]
     });
     
-    // If no data in database or data is stale or force refresh requested
-    if (!latestPrice || isDataStale(latestPrice.lastUpdated) || forceRefresh) {
+    console.log(`Database check result: ${latestPrice ? 'Found data' : 'No data'}`);
+    
+    // If no data in database or data is stale, try to fetch from API
+    if (!latestPrice || isDataStale(latestPrice.lastUpdated)) {
+      let reason = 'Unknown';
       if (!latestPrice) {
-        console.log('No data in database, fetching from external API');
+        reason = 'No data in database';
       } else if (isDataStale(latestPrice.lastUpdated)) {
-        console.log('Data is stale, fetching fresh data from API');
-      } else {
-        console.log('Force refresh requested, fetching from API');
+        reason = 'Data is stale';
       }
+      
+      console.log(`Fetching fresh data from external API. Reason: ${reason}`);
       
       try {
         // Get fresh data from external API
         const externalData = await fetchExternalPriceData();
-        const { spotPrice, change, changePercent, lastUpdated, isCashSettlement } = processExternalData(externalData);
         
-        if (!isCashSettlement && process.env.ALLOW_API_TO_DATABASE === 'true') {
-          // Save to database if it's not cash settlement data
-          const formattedDate = new Date(lastUpdated || new Date());
-          
-          // Save asynchronously to not block response
-          savePriceToDatabase(metal, spotPrice, change, changePercent, formattedDate)
-            .then(() => console.log('Successfully saved new price data to database'))
-            .catch(err => console.error('Error in async database save:', err));
-          
-          // Return the fresh data immediately
-          return {
-            type: 'spotPrice',
-            spotPrice: Number(spotPrice),
-            change: Number(change),
-            changePercent: Number(changePercent),
-            lastUpdated: formattedDate.toISOString(),
-            fresh: true
-          };
+        console.log('Processing external data:', JSON.stringify(externalData));
+        
+        if (!externalData) {
+          throw new Error('External API returned empty data');
         }
+        
+        // Check if we have valid spot price data
+        if (externalData.spot_price === undefined || externalData.spot_price === null) {
+          console.error('No valid spot price in external API response');
+          throw new Error('No valid spot price in external API response');
+        }
+        
+        const { spotPrice, change, changePercent, lastUpdated } = processExternalData(externalData);
+        
+        console.log(`Processed data: spotPrice=${spotPrice}, change=${change}, changePercent=${changePercent}`);
+        
+        // Always try to save to database
+        const formattedDate = new Date(lastUpdated || new Date());
+        
+        try {
+          console.log(`Saving to database: metal=${metal}, price=${spotPrice}, date=${formattedDate}`);
+          await savePriceToDatabase(metal, spotPrice, change, changePercent, formattedDate);
+          console.log('Successfully saved new price data to database');
+        } catch (saveErr) {
+          console.error('Error saving to database:', saveErr);
+          // Continue even if save fails
+        }
+        
+        // Return the fresh data immediately
+        return {
+          type: 'spotPrice',
+          spotPrice: Number(spotPrice),
+          change: Number(change),
+          changePercent: Number(changePercent),
+          lastUpdated: formattedDate.toISOString(),
+          fresh: true,
+          source: 'external'
+        };
       } catch (apiError) {
         console.error('External API error:', apiError);
         // If external API fails, fall back to database
@@ -242,12 +331,14 @@ async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = 
     
     // If we reach here, return database data
     if (latestPrice) {
+      console.log(`Returning database data: spotPrice=${latestPrice.spotPrice}, date=${latestPrice.lastUpdated}`);
       return {
         type: 'spotPrice',
         spotPrice: Number(latestPrice.spotPrice),
         change: Number(latestPrice.change),
         changePercent: Number(latestPrice.changePercent),
-        lastUpdated: latestPrice.lastUpdated.toISOString()
+        lastUpdated: latestPrice.lastUpdated.toISOString(),
+        source: 'database'
       };
     } else {
       throw new Error('No price data available');
@@ -474,6 +565,9 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  console.log(`API request received: ${req.method} ${req.url}`);
+  console.log('Query parameters:', req.query);
+  
   // Set cache control headers to prevent browser caching
   res.setHeader('Cache-Control', noCacheHeaders['Cache-Control']);
   res.setHeader('Pragma', noCacheHeaders['Pragma']);
@@ -808,7 +902,7 @@ export default async function handler(
   }
   
   // Check if this is a history request
-  const { history, metal = 'aluminum', limit = 30, forceMetalPrice = false, returnAverage = false } = req.query;
+  const { history, metal = 'aluminum', limit = 30, returnAverage = false } = req.query;
   
   if (history === 'true') {
     // Handle history request
@@ -862,46 +956,30 @@ export default async function handler(
   }
 
   // If forceMetalPrice is true, directly return data from the MetalPrice table
-  if (forceMetalPrice === 'true') {
+  if (req.query.forceMetalPrice === 'true') {
     try {
       // Convert metal parameter to string, handling arrays
-      const metalParam = Array.isArray(metal) ? metal[0] : metal as string;
+      const metalParam = Array.isArray(req.query.metal) ? req.query.metal[0] : (req.query.metal as string || 'aluminum');
       
       console.log(`Handling forceMetalPrice=true request for ${metalParam}`);
       
-      // Check if we should bypass cache entirely
-      const bypassCache = req.query._t !== undefined;
+      // Always force refresh when explicitly requested with forceMetalPrice=true
+      // This ensures we get the latest data from the external API
+      const bypassCache = true;
       
-      // Check in-memory cache first to reduce database load
-      const now = Date.now();
-      if (!bypassCache && 
-          responseCache.data && 
-          responseCache.data.metal === metalParam && 
-          now - responseCache.timestamp < responseCache.ttl) {
-        console.log('Returning cached response');
-        return res.status(200).json(responseCache.data);
-      }
+      console.log(`Fetching latest price for ${metalParam}, bypassCache=${bypassCache}`);
+      const priceData = await getLatestPriceWithRefresh(metalParam, bypassCache);
       
-      // Get latest price with automatic refresh when data is stale
-      try {
-        const priceData = await getLatestPriceWithRefresh(metalParam, bypassCache);
-        
-        // Update cache
-        responseCache = {
-          data: { ...priceData, metal: metalParam },
-          timestamp: now,
-          ttl: responseCache.ttl
-        };
-        
-        return res.status(200).json(priceData);
-      } catch (error) {
-        console.error('Error getting price data:', error);
-        return res.status(404).json({
-          type: 'noData',
-          error: 'No data available',
-          message: 'No price data found'
-        });
-      }
+      console.log('Price data retrieved:', JSON.stringify(priceData));
+      
+      // Update cache
+      responseCache = {
+        data: { ...priceData, metal: metalParam },
+        timestamp: Date.now(),
+        ttl: responseCache.ttl
+      };
+      
+      return res.status(200).json(priceData);
     } catch (error) {
       console.error('Error handling forceMetalPrice request:', error);
       return res.status(500).json({
