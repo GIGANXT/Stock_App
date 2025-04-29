@@ -176,7 +176,7 @@ interface DbRecord {
   createdAt: Date;
 }
 
-// Function to save price data to database with improved error handling
+// Function to save price data to database with improved error handling and duplicate prevention
 async function savePriceToDatabase(
   metal: string,
   spotPrice: number,
@@ -185,20 +185,73 @@ async function savePriceToDatabase(
   lastUpdated: Date
 ): Promise<DbRecord> {
   try {
-    // Check if this data already exists in the database
-    const existingRecord = await prisma.metalPrice.findFirst({
+    // Calculate a time range (5 minutes before and after) to check for similar records
+    const fiveMinutesMs = 5 * 60 * 1000;
+    const timeRangeStart = new Date(lastUpdated.getTime() - fiveMinutesMs);
+    const timeRangeEnd = new Date(lastUpdated.getTime() + fiveMinutesMs);
+    
+    // More comprehensive duplicate check - look for any records in a time range with same price
+    const existingRecords = await prisma.metalPrice.findMany({
       where: {
         metal,
-        lastUpdated
+        lastUpdated: {
+          gte: timeRangeStart,
+          lte: timeRangeEnd
+        },
+        spotPrice: {
+          equals: spotPrice
+        }
+      },
+      orderBy: {
+        lastUpdated: 'desc'
+      },
+      take: 1
+    });
+    
+    if (existingRecords.length > 0) {
+      console.log(`Found duplicate record within 5-minute window with same price (${spotPrice}), skipping save`);
+      return existingRecords[0];
+    }
+    
+    // Get the most recent record to compare values
+    const mostRecentRecord = await prisma.metalPrice.findFirst({
+      where: { metal },
+      orderBy: {
+        lastUpdated: 'desc'
       }
     });
     
-    if (existingRecord) {
-      console.log('Record with same timestamp already exists');
-      return existingRecord;
+    // If we have a recent record with the exact same price, don't save a duplicate
+    if (mostRecentRecord && Number(mostRecentRecord.spotPrice) === spotPrice) {
+      console.log(`Most recent price is identical (${spotPrice}), no need to save duplicate record`);
+      
+      // If the record is older than 6 hours, update the timestamp instead of creating new record
+      const sixHoursMs = 6 * 60 * 60 * 1000;
+      const now = new Date();
+      if (now.getTime() - mostRecentRecord.lastUpdated.getTime() > sixHoursMs) {
+        // Update the timestamp only if price hasn't changed but it's been a while
+        const updatedRecord = await prisma.metalPrice.update({
+          where: { id: mostRecentRecord.id },
+          data: { lastUpdated: now }
+        });
+        console.log(`Updated timestamp of existing record with same price (${spotPrice})`);
+        return updatedRecord;
+      }
+      
+      return mostRecentRecord; // Return existing record
     }
     
-    // Create new record
+    // Rate limiting - check if we've added a record in the last minute
+    if (mostRecentRecord) {
+      const oneMinuteMs = 60 * 1000;
+      const now = new Date();
+      if (now.getTime() - mostRecentRecord.lastUpdated.getTime() < oneMinuteMs) {
+        console.log('Rate limiting: Already added a record within the last minute, skipping');
+        return mostRecentRecord;
+      }
+    }
+    
+    // Create new record only if we passed all duplicate checks
     const newRecord = await prisma.metalPrice.create({
       data: {
         metal,
