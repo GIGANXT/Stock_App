@@ -115,7 +115,7 @@ function processExternalData(externalData: ExternalApiData): ProcessedApiData {
   console.log('Processing external data:', JSON.stringify(externalData));
   
   // Validate spot price
-  const spotPrice = externalData.spot_price !== null && externalData.spot_price !== undefined
+  let spotPrice = externalData.spot_price !== null && externalData.spot_price !== undefined
     ? Number(externalData.spot_price)
     : (externalData.cash_settlement !== null && externalData.cash_settlement !== undefined
       ? Number(externalData.cash_settlement)
@@ -125,14 +125,19 @@ function processExternalData(externalData: ExternalApiData): ProcessedApiData {
     console.error('No valid price data found in API response');
   }
   
+  // Extract change data with fallbacks
+  const change = externalData.price_change !== undefined ? Number(externalData.price_change) : 0;
+  
+  // Apply formula: spotPrice = spotPrice + change
+  spotPrice = spotPrice + change;
+  console.log(`Applied formula spotPrice + change: ${spotPrice - change} + ${change} = ${spotPrice}`);
+  
   // Detect if this is cash settlement data
   const isCashSettlement = Boolean(
     externalData.is_cash_settlement || 
     (externalData.cash_settlement !== null && externalData.cash_settlement !== undefined)
   );
   
-  // Extract change data with fallbacks
-  const change = externalData.price_change !== undefined ? Number(externalData.price_change) : 0;
   const changePercent = externalData.change_percentage !== undefined ? Number(externalData.change_percentage) : 0;
   
   // Ensure we have a valid date
@@ -142,13 +147,13 @@ function processExternalData(externalData: ExternalApiData): ProcessedApiData {
   
   console.log(`Processed data: spotPrice=${spotPrice}, change=${change}, changePercent=${changePercent}, lastUpdated=${lastUpdated}, isCashSettlement=${isCashSettlement}`);
   
-    return {
+  return {
     spotPrice,
     change,
     changePercent,
     lastUpdated,
     isCashSettlement
-    };
+  };
 }
 
 // Type definition for database record with support for Prisma Decimal type
