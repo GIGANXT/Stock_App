@@ -31,8 +31,8 @@ model User {
   id             Int             @id @default(autoincrement())
   name           String
   email          String          @unique
-  mcxPriceAlerts MCXPriceAlert[]
   lmePriceAlerts LMEPriceAlert[]
+  mcxPriceAlerts MCXPriceAlert[]
 }
 
 model FuturesPrice {
@@ -51,34 +51,29 @@ model FuturesPrice {
   @@index([contractMonth])
 }
 
-
 model AluminumSnapshot {
-  id               String   @id @default(uuid())
-  timestamp        DateTime
-
-  month1Label      String
-  month1Price      Decimal  @db.Decimal(10, 2)
-  month1RateVal    Decimal  @db.Decimal(10, 2)
-  month1RatePct    Decimal  @db.Decimal(6, 2)
-
-  month2Label      String
-  month2Price      Decimal  @db.Decimal(10, 2)
-  month2RateVal    Decimal  @db.Decimal(10, 2)
-  month2RatePct    Decimal  @db.Decimal(6, 2)
-
-  month3Label      String
-  month3Price      Decimal  @db.Decimal(10, 2)
-  month3RateVal    Decimal  @db.Decimal(10, 2)
-  month3RatePct    Decimal  @db.Decimal(6, 2)
-
-  createdAt        DateTime @default(now())
+  id            String   @id @default(uuid())
+  timestamp     DateTime
+  month1Label   String
+  month1Price   Decimal  @db.Decimal(10, 2)
+  month1RateVal Decimal  @db.Decimal(10, 2)
+  month1RatePct Decimal  @db.Decimal(6, 2)
+  month2Label   String
+  month2Price   Decimal  @db.Decimal(10, 2)
+  month2RateVal Decimal  @db.Decimal(10, 2)
+  month2RatePct Decimal  @db.Decimal(6, 2)
+  month3Label   String
+  month3Price   Decimal  @db.Decimal(10, 2)
+  month3RateVal Decimal  @db.Decimal(10, 2)
+  month3RatePct Decimal  @db.Decimal(6, 2)
+  createdAt     DateTime @default(now())
 
   @@index([timestamp])
 }
 
 model MetalPrice {
   id            String   @id @default(uuid())
-  metal         String   // e.g., "aluminum", "copper"
+  metal         String
   spotPrice     Decimal  @db.Decimal(10, 2)
   change        Decimal  @db.Decimal(10, 2)
   changePercent Decimal  @db.Decimal(6, 2)
@@ -89,7 +84,90 @@ model MetalPrice {
   @@index([lastUpdated])
 }
 
-// Price Alert models
+model MCXPriceAlert {
+  id                 String             @id @default(uuid())
+  userId             Int
+  currentPrice       Decimal            @db.Decimal(10, 2)
+  targetPrice        Decimal?           @db.Decimal(10, 2)
+  alertType          AlertType          @default(PRICE)
+  percentageType     PercentageType?
+  targetPercentage   Decimal?           @db.Decimal(6, 2)
+  calculatedTarget   Decimal?           @db.Decimal(10, 2)
+  status             AlertStatus        @default(ACTIVE)
+  notificationMethod NotificationMethod
+  customMessage      String?
+  lastUpdated        DateTime           @default(now())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  expiresAt          DateTime?
+  user               User               @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+model LMEPriceAlert {
+  id                 String             @id @default(uuid())
+  userId             Int
+  currentPrice       Decimal            @db.Decimal(10, 2)
+  targetPrice        Decimal?           @db.Decimal(10, 2)
+  alertType          AlertType          @default(PRICE)
+  percentageType     PercentageType?
+  targetPercentage   Decimal?           @db.Decimal(6, 2)
+  calculatedTarget   Decimal?           @db.Decimal(10, 2)
+  status             AlertStatus        @default(ACTIVE)
+  notificationMethod NotificationMethod
+  customMessage      String?
+  lastUpdated        DateTime           @default(now())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  expiresAt          DateTime?
+  user               User               @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+model LME_3_MetalPrice {
+  id           Int      @id @default(autoincrement())
+  rateOfChange String
+  percentage   Float
+  timeSpan     String
+  timestamp    DateTime
+  value        Float
+  createdAt    DateTime @default(now())
+}
+
+model SBITTRate {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @unique
+  rate      Float
+  createdAt DateTime @default(now())
+}
+
+model RBI_Rate {
+  id        Int      @id @default(autoincrement())
+  date      String   @unique
+  rate      Float
+  createdAt DateTime @default(now())
+}
+
+model LMECashSettlement {
+  id                Int      @id @default(autoincrement())
+  date              String   @unique
+  price             Float
+  Dollar_Difference Float
+  INR_Difference    Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model LME_West_Metal_Price {
+  id        Int      @id @default(autoincrement())
+  date      String   @unique
+  Price     Float
+  createdAt DateTime @default(now())
+}
 
 enum AlertType {
   PRICE
@@ -113,91 +191,4 @@ enum PercentageType {
   GAIN
   LOSS
   GAINLOSS
-}
-
-model MCXPriceAlert {
-  id                String            @id @default(uuid())
-  userId            Int               // User ID as foreign key
-  user              User              @relation(fields: [userId], references: [id])  // Relation to User model
-  currentPrice      Decimal           @db.Decimal(10, 2) // Current price (updated with live data)
-  targetPrice       Decimal?          @db.Decimal(10, 2) // For price-based alerts
-  alertType         AlertType         @default(PRICE)
-  percentageType    PercentageType?   // Only for percentage-based alerts
-  targetPercentage  Decimal?          @db.Decimal(6, 2)  // Only for percentage-based alerts
-  calculatedTarget  Decimal?          @db.Decimal(10, 2) // Stores the calculated target price for percentage alerts
-  status            AlertStatus       @default(ACTIVE)
-  notificationMethod NotificationMethod
-  customMessage     String?           // Optional custom message
-  lastUpdated       DateTime          @default(now())    // Timestamp of last price update
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  expiresAt         DateTime?         // Optional expiration date
-
-  @@index([userId])
-  @@index([status])
-}
-
-model LMEPriceAlert {
-  id                String            @id @default(uuid())
-  userId            Int               // User ID as foreign key
-  user              User              @relation(fields: [userId], references: [id])  // Relation to User model
-  currentPrice      Decimal           @db.Decimal(10, 2) // Current price (updated with live data)
-  targetPrice       Decimal?          @db.Decimal(10, 2) // For price-based alerts
-  alertType         AlertType         @default(PRICE)
-  percentageType    PercentageType?   // Only for percentage-based alerts
-  targetPercentage  Decimal?          @db.Decimal(6, 2)  // Only for percentage-based alerts
-  calculatedTarget  Decimal?          @db.Decimal(10, 2) // Stores the calculated target price for percentage alerts
-  status            AlertStatus       @default(ACTIVE)
-  notificationMethod NotificationMethod
-  customMessage     String?           // Optional custom message
-  lastUpdated       DateTime          @default(now())    // Timestamp of last price update
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  expiresAt         DateTime?         // Optional expiration date
-
-  @@index([userId])
-  @@index([status])
-}
-
-model LME_3_MetalPrice {
-  id           Int      @id @default(autoincrement())
-  rateOfChange String
-  percentage   Float
-  timeSpan     String
-  timestamp    DateTime
-  value        Float
-  createdAt    DateTime @default(now())
-}
-
-model SBITTRate {
-  id        Int      @id @default(autoincrement())
-  date      DateTime @unique
-  rate      Float
-  createdAt DateTime @default(now())
-}
-
-
-model RBI_Rate {
-  id        Int      @id @default(autoincrement())
-  date      String @unique
-  rate      Float
-  createdAt DateTime @default(now())
-}
-
-model LMECashSettlement {
-  id             Int      @id @default(autoincrement())
-  date           String   @unique
-  price          Float
-  Dollar_Difference Float
-  INR_Difference  Float
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-}
-
-model LME_West_Metal_Price {
-  id             Int      @id @default(autoincrement())
-  date           String       @unique
-  Price          Float
-  createdAt      DateTime @default(now())
 }

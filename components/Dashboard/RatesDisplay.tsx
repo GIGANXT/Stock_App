@@ -37,16 +37,55 @@ interface RatesDisplayProps {
   expanded?: boolean;
 }
 
+// Add a safe date formatting utility
+const safeFormatDate = (date: Date | string | null | undefined, formatStr: string, fallback = 'N/A'): string => {
+  try {
+    if (!date) return fallback;
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    // Check if date is valid before formatting
+    if (isNaN(dateObj.getTime())) {
+      return fallback;
+    }
+    return format(dateObj, formatStr);
+  } catch (err) {
+    console.error('Error formatting date:', err);
+    return fallback;
+  }
+};
+
+// Add helper to validate dates
+const isValidDate = (date: any): boolean => {
+  if (!date) return false;
+  const parsedDate = new Date(date);
+  return !isNaN(parsedDate.getTime());
+};
+
 export default function RatesDisplay({ className = "", expanded = false }: RatesDisplayProps) {
   const [showAddOptions, setShowAddOptions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [lastUpdated, setLastUpdated] = useState<Date>(() => {
+    try {
+      return new Date(); // Use current date as default
+    } catch (e) {
+      console.error("Error creating default date:", e);
+      // Unix epoch as absolute fallback
+      return new Date(0);
+    }
+  });
   const [rbiRate, setRbiRate] = useState<number | null>(null);
   const [sbiRate, setSbiRate] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rbiUpdated, setRbiUpdated] = useState<Date>(new Date());
+  const [rbiUpdated, setRbiUpdated] = useState<Date>(() => {
+    try {
+      return new Date(); // Use current date as default
+    } catch (e) {
+      console.error("Error creating default date:", e);
+      // Unix epoch as absolute fallback
+      return new Date(0);
+    }
+  });
   const { addExpandedComponent } = useExpandedComponents();
 
   // Add click-away listener to close dropdown
@@ -78,7 +117,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         setRbiRate(rate); // Convert string to number
         
         // Set RBI update date if available in the response
-        if (result.data[0].date) {
+        if (result.data[0].date && isValidDate(result.data[0].date)) {
           setRbiUpdated(new Date(result.data[0].date));
         } else {
           setRbiUpdated(new Date());
@@ -118,7 +157,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         setSbiRate(rate); // Convert string to number
         
         // Set SBI update date if available in the response
-        if (result.data[0].date) {
+        if (result.data[0].date && isValidDate(result.data[0].date)) {
           setLastUpdated(new Date(result.data[0].date));
         } else {
           setLastUpdated(new Date());
@@ -211,7 +250,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         {updateDate && (
           <div className="flex items-center justify-between w-full">
             <div className="text-xs text-gray-500 flex items-center gap-1">
-              <span>Updated: {format(updateDate, "MMM d")}</span>
+              <span>Updated: {safeFormatDate(updateDate, "MMM d", "Unknown")}</span>
             </div>
             {error && error.includes("cached") && (
               <div className="text-xs text-yellow-600 flex items-center gap-1">
@@ -247,7 +286,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
                 <span className="text-gray-500 text-sm">/USD</span>
               </div>
               <div className="text-xs text-gray-500 mt-2">
-                {rbiUpdated ? `Updated at: ${format(rbiUpdated, "dd-MMMM-yyyy")}` : "Updated daily by Reserve Bank of India"}
+                {rbiUpdated ? `Updated at: ${safeFormatDate(rbiUpdated, "dd-MMMM-yyyy", "Unknown date")}` : "Updated daily by Reserve Bank of India"}
               </div>
             </div>
 
@@ -263,7 +302,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
                 <span className="text-gray-500 text-sm">/USD</span>
               </div>
               <div className="text-xs text-gray-500 mt-2">
-                <span>Updated at: {format(lastUpdated, "dd-MMMM-yyyy")}</span>
+                <span>Updated at: {safeFormatDate(lastUpdated, "dd-MMMM-yyyy", "Unknown date")}</span>
               </div>
             </div>
           </div>
@@ -395,7 +434,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
           </div>
           <div className="flex items-center gap-2">
             <div className="text-xs text-gray-500">
-              {format(lastUpdated, "HH:mm:ss")}
+              {safeFormatDate(lastUpdated, "HH:mm:ss", "Unknown time")}
             </div>
             <button
               onClick={handleRefresh}
@@ -520,7 +559,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
                   {rbiUpdated && (
                     <div className="flex items-center justify-between w-full">
                       <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <span>Updated at: {format(rbiUpdated, "dd-MMMM-yyyy")}</span>
+                        <span>Updated at: {safeFormatDate(rbiUpdated, "dd-MMMM-yyyy", "Unknown date")}</span>
                       </div>
                     </div>
                   )}
@@ -542,7 +581,7 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
                   {lastUpdated && (
                     <div className="flex items-center justify-between w-full">
                       <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <span>Updated at: {format(lastUpdated, "dd-MMMM-yyyy")}</span>
+                        <span>Updated at: {safeFormatDate(lastUpdated, "dd-MMMM-yyyy", "Unknown date")}</span>
                       </div>
                     </div>
                   )}

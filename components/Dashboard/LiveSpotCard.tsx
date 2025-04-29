@@ -47,35 +47,61 @@ export default function LiveSpotCard({
         const fetchPriceData = async () => {
             try {
                 setLoading(true);
-                const response = await fetch(apiUrl);
+                setError(null); // Reset error state at start of fetch
                 
-                if (!response.ok) {
-                    if (response.status === 404) {
-                        // Specifically handle case when no data exists in database
-                        throw new Error('No price data available in database');
+                // Add timeout to prevent hanging requests
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                
+                try {
+                    const response = await fetch(apiUrl, { 
+                        signal: controller.signal,
+                        headers: {
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                        }
+                    });
+                    
+                    clearTimeout(timeoutId); // Clear timeout on successful response
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            setError('No price data available in database');
+                        } else {
+                            setError(`Failed to fetch price data: ${response.status}`);
+                        }
+                        setLoading(false);
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.type === 'noData') {
+                        setError(data.message || 'No price data available');
+                        setLoading(false);
+                        return;
+                    }
+                    
+                    setPriceData(data);
+                    
+                    // Store the data points count if available
+                    if (data.type === 'averagePrice' && data.dataPointsCount) {
+                        setDataPointsCount(data.dataPointsCount);
+                    }
+                    
+                    setError(null);
+                } catch (fetchErr) {
+                    clearTimeout(timeoutId);
+                    if (fetchErr.name === 'AbortError') {
+                        setError('Request timed out. Please try again later.');
                     } else {
-                        throw new Error(`Failed to fetch price data: ${response.status}`);
+                        setError('Network error. Please check your connection.');
+                        console.error('Fetch error:', fetchErr);
                     }
                 }
-                
-                const data = await response.json();
-                
-                if (data.type === 'noData') {
-                    // API returned success but with noData type
-                    throw new Error(data.message || 'No price data available');
-                }
-                
-                setPriceData(data);
-                
-                // Store the data points count if available
-                if (data.type === 'averagePrice' && data.dataPointsCount) {
-                    setDataPointsCount(data.dataPointsCount);
-                }
-                
-                setError(null);
             } catch (err) {
-                console.error('Error fetching price data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load price data');
+                console.error('Error in fetchPriceData:', err);
+                setError('An unexpected error occurred');
             } finally {
                 setLoading(false);
             }
@@ -93,24 +119,48 @@ export default function LiveSpotCard({
     }, [apiUrl]);
 
     // Use API data if available, otherwise use props
-    const displayTime = priceData?.lastUpdated
-        ? parseISO(priceData.lastUpdated) 
-        : (lastUpdated || new Date());
+    const displayTime = React.useMemo(() => {
+        try {
+            return priceData?.lastUpdated
+                ? parseISO(priceData.lastUpdated) 
+                : (lastUpdated || new Date());
+        } catch (err) {
+            console.error('Error parsing date:', err);
+            return new Date(); // Fallback to current date on parse error
+        }
+    }, [priceData?.lastUpdated, lastUpdated]);
     
     // Prioritize average price when available (for averagePrice type)
-    const currentSpotPrice = priceData?.type === 'averagePrice' && priceData?.averagePrice !== undefined
-        ? priceData.averagePrice
-        : priceData?.spotPrice !== undefined
-            ? priceData.spotPrice 
-            : spotPrice;
+    const currentSpotPrice = React.useMemo(() => {
+        try {
+            return priceData?.type === 'averagePrice' && priceData?.averagePrice !== undefined
+                ? priceData.averagePrice
+                : priceData?.spotPrice !== undefined
+                    ? priceData.spotPrice 
+                    : spotPrice;
+        } catch (err) {
+            console.error('Error calculating spot price:', err);
+            return spotPrice; // Fallback to props on error
+        }
+    }, [priceData, spotPrice]);
         
-    const currentChange = priceData?.change !== undefined
-        ? priceData.change 
-        : change;
+    const currentChange = React.useMemo(() => {
+        try {
+            return priceData?.change !== undefined ? priceData.change : change;
+        } catch (err) {
+            console.error('Error calculating change:', err);
+            return change; // Fallback to props on error
+        }
+    }, [priceData?.change, change]);
         
-    const currentChangePercent = priceData?.changePercent !== undefined
-        ? priceData.changePercent 
-        : changePercent;
+    const currentChangePercent = React.useMemo(() => {
+        try {
+            return priceData?.changePercent !== undefined ? priceData.changePercent : changePercent;
+        } catch (err) {
+            console.error('Error calculating change percent:', err);
+            return changePercent; // Fallback to props on error
+        }
+    }, [priceData?.changePercent, changePercent]);
     
     const isIncrease = currentChange >= 0;
     const trendColor = isIncrease ? "text-green-600" : "text-red-600";
@@ -118,6 +168,34 @@ export default function LiveSpotCard({
 
     // Determine if we're showing average price
     const isAveragePrice = priceData?.type === 'averagePrice';
+
+    // Safe formatting functions
+    const formatPrice = (price: number) => {
+        try {
+            return price.toFixed(2);
+        } catch (err) {
+            console.error('Error formatting price:', err);
+            return '0.00';
+        }
+    };
+
+    const formatPercent = (percent: number) => {
+        try {
+            return percent.toFixed(2);
+        } catch (err) {
+            console.error('Error formatting percent:', err);
+            return '0.00';
+        }
+    };
+
+    const formatDate = (date: Date) => {
+        try {
+            return format(date, 'dd. MMMM yyyy');
+        } catch (err) {
+            console.error('Error formatting date:', err);
+            return 'Unknown date';
+        }
+    };
 
     return (
         <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
@@ -165,7 +243,7 @@ export default function LiveSpotCard({
                         <div className="h-[65px] flex flex-col justify-center">
                             <div className="flex items-baseline gap-2">
                                 <span className="font-mono text-xl md:text-2xl font-bold text-indigo-600">
-                                    ${currentSpotPrice.toFixed(2)}
+                                    ${formatPrice(currentSpotPrice)}
                                 </span>
                                 <span className="text-xs text-gray-500">
                                     {isAveragePrice ? 'Average' : ''}{unit}
@@ -175,7 +253,7 @@ export default function LiveSpotCard({
                             <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-1.5 md:mt-2 font-medium`}>
                                 <TrendIcon className="w-4 h-4 flex-shrink-0 crisp-text" />
                                 <span className="whitespace-nowrap crisp-text">
-                                    {isIncrease ? '+' : ''}{currentChangePercent.toFixed(2)}%
+                                    {isIncrease ? '+' : ''}{formatPercent(currentChangePercent)}%
                                 </span>
                                 {isAveragePrice && (
                                     <span className="text-xs text-gray-500 ml-1">(first to latest)</span>
@@ -196,7 +274,7 @@ export default function LiveSpotCard({
                     <div className="font-medium antialiased subpixel-antialiased flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 crisp-text group-hover:text-indigo-600 transition-colors duration-300" />
                         <span className="crisp-text group-hover:text-indigo-800 transition-colors duration-300 font-bold">
-                            {format(displayTime, 'dd. MMMM yyyy')}
+                            {formatDate(displayTime)}
                         </span>
                     </div>
                     {isAveragePrice && dataPointsCount > 0 && (
