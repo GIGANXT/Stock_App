@@ -90,9 +90,9 @@ export default function LiveSpotCard({
                     }
                     
                     setError(null);
-                } catch (fetchErr) {
+                } catch (fetchErr: unknown) {
                     clearTimeout(timeoutId);
-                    if (fetchErr.name === 'AbortError') {
+                    if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
                         setError('Request timed out. Please try again later.');
                     } else {
                         setError('Network error. Please check your connection.');
