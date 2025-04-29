@@ -102,10 +102,10 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
     };
   }, []);
 
-  // Fetch RBI rate from Next.js API
+  // Fetch RBI rate from Next.js API (now always from database)
   const fetchRbiRate = async () => {
     try {
-      const response = await fetch("/api/rbi"); // Calls your Next.js API
+      const response = await fetch("/api/rbi"); // Calls your Next.js API to get data from the database
       const result = await response.json();
 
       if (!response.ok) {
@@ -128,6 +128,8 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         
         // Clear any previous errors
         setError(null);
+      } else {
+        throw new Error("No RBI rate data available");
       }
     } catch (error) {
       console.error("Error fetching RBI rate:", error);
@@ -135,10 +137,10 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
     }
   };
 
-  // Fetch SBI TT rate from Next.js API
+  // Fetch SBI TT rate from Next.js API (now always from database)
   const fetchSbiRate = async () => {
     try {
-      const response = await fetch("/api/sbitt"); // Calls your Next.js API
+      const response = await fetch("/api/sbitt"); // Calls your Next.js API to get data from the database
       
       if (!response.ok) {
         throw new Error("Failed to fetch SBI data");
@@ -157,8 +159,8 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         setSbiRate(rate); // Convert string to number
         
         // Set SBI update date if available in the response
-        if (result.data[0].date && isValidDate(result.data[0].date)) {
-          setLastUpdated(new Date(result.data[0].date));
+        if (result.data[0].timestamp && isValidDate(result.data[0].timestamp)) {
+          setLastUpdated(new Date(result.data[0].timestamp));
         } else {
           setLastUpdated(new Date());
         }
@@ -168,6 +170,8 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         
         // Clear any previous errors
         setError(null);
+      } else {
+        throw new Error("No SBI rate data available");
       }
     } catch (error) {
       console.error("🚨 Error fetching SBI rate:", error);
