@@ -63,33 +63,33 @@ export default function LiveSpotCard({
                     });
                     
                     clearTimeout(timeoutId); // Clear timeout on successful response
-                    
-                    if (!response.ok) {
-                        if (response.status === 404) {
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
                             setError('No price data available in database');
-                        } else {
+                    } else {
                             setError(`Failed to fetch price data: ${response.status}`);
-                        }
+                    }
                         setLoading(false);
                         return;
-                    }
-                    
-                    const data = await response.json();
-                    
-                    if (data.type === 'noData') {
+                }
+                
+                const data = await response.json();
+                
+                if (data.type === 'noData') {
                         setError(data.message || 'No price data available');
                         setLoading(false);
                         return;
-                    }
-                    
-                    setPriceData(data);
-                    
-                    // Store the data points count if available
-                    if (data.type === 'averagePrice' && data.dataPointsCount) {
-                        setDataPointsCount(data.dataPointsCount);
-                    }
-                    
-                    setError(null);
+                }
+                
+                setPriceData(data);
+                
+                // Store the data points count if available
+                if (data.type === 'averagePrice' && data.dataPointsCount) {
+                    setDataPointsCount(data.dataPointsCount);
+                }
+                
+                setError(null);
                 } catch (fetchErr: unknown) {
                     clearTimeout(timeoutId);
                     if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
@@ -122,8 +122,8 @@ export default function LiveSpotCard({
     const displayTime = React.useMemo(() => {
         try {
             return priceData?.lastUpdated
-                ? parseISO(priceData.lastUpdated) 
-                : (lastUpdated || new Date());
+        ? parseISO(priceData.lastUpdated) 
+        : (lastUpdated || new Date());
         } catch (err) {
             console.error('Error parsing date:', err);
             return new Date(); // Fallback to current date on parse error
@@ -134,10 +134,10 @@ export default function LiveSpotCard({
     const currentSpotPrice = React.useMemo(() => {
         try {
             return priceData?.type === 'averagePrice' && priceData?.averagePrice !== undefined
-                ? priceData.averagePrice
-                : priceData?.spotPrice !== undefined
-                    ? priceData.spotPrice 
-                    : spotPrice;
+        ? priceData.averagePrice
+        : priceData?.spotPrice !== undefined
+            ? priceData.spotPrice 
+            : spotPrice;
         } catch (err) {
             console.error('Error calculating spot price:', err);
             return spotPrice; // Fallback to props on error

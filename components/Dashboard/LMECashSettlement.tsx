@@ -2,7 +2,6 @@ import React from 'react';
 import { TrendingUp, TrendingDown, Calendar, DollarSign } from 'lucide-react';
 
 interface LMECashSettlementProps {
-  priceName?: string;
   basePrice?: number;
   spread?: number;
   spreadINR?: string;
@@ -11,7 +10,6 @@ interface LMECashSettlementProps {
 }
 
 export default function LMECashSettlement({
-  priceName = "",
   basePrice = 2650,
   spread = 40,
   spreadINR = '3350.00',
@@ -21,6 +19,9 @@ export default function LMECashSettlement({
   const totalPrice = basePrice;
   const trendColor = isIncrease ? "text-green-600" : "text-red-600";
   const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
+  
+  // Ensure spreadINR is properly displayed
+  const displayINR = typeof spreadINR === 'string' ? spreadINR : String(spreadINR || '0.00');
 
   return (
     <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
@@ -58,24 +59,20 @@ export default function LMECashSettlement({
               </span>
               <span className="text-xs text-gray-500">/MT</span>
             </div>
-
-            {/* Change Indicators */}
-            <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-1.5 md:mt-2 font-medium`}>
-              <TrendIcon className="w-4 h-4 flex-shrink-0 crisp-text" />
-              <span className="whitespace-nowrap crisp-text">
-                {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
-              </span>
-            </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
-          <div className="font-bold">
-            {formattedDate}
+        {/* Dollar difference display with INR value */}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-1.5">
+            <TrendIcon className={`w-4 h-4 flex-shrink-0 crisp-text ${trendColor}`} />
+            <span className={`whitespace-nowrap crisp-text ${trendColor} font-medium`}>
+              {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
+            </span>
           </div>
-          <div className={`${trendColor} font-medium`}>
-            {isIncrease ? '+' : '-'}₹{spreadINR}
+          
+          <div className={`${trendColor} font-medium text-sm flex items-center gap-1`}>
+            <span>{isIncrease ? '+' : '-'}₹{displayINR}</span>
           </div>
         </div>
       </div>

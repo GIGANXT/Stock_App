@@ -53,18 +53,38 @@ export default async function handler(
         
         data = parsedData.data;
         
-        // Store the data in the database for future use
+        // Store the data in the database for future use, but only once per day
         if (data && data.length > 0) {
           try {
-            // Use raw SQL to insert data since TypeScript is having issues with the schema
-            await prisma.$executeRaw`
-              INSERT INTO "SBITTRate" ("date", "rate") 
-              VALUES (${new Date()}, ${parseFloat(data[0].sbi_tt_sell)})
-            `;
-            console.log("✅ SBI TT rate saved to database");
+            // Get today's date (without time) for checking if we already have data for today
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // Check if we already have data for today
+            const todayData = await prisma.sBITTRate.findFirst({
+              where: {
+                date: {
+                  gte: today,
+                  lt: new Date(today.getTime() + 24 * 60 * 60 * 1000), // Next day
+                },
+              },
+            });
+            
+            // Only insert if we don't have data for today
+            if (!todayData) {
+              await prisma.sBITTRate.create({
+                data: {
+                  date: new Date(),
+                  rate: parseFloat(data[0].sbi_tt_sell),
+                },
+              });
+              console.log("✅ SBI TT rate saved to database (first entry for today)");
+            } else {
+              console.log("⏭️ SBI TT rate already exists for today, skipping database insert");
+            }
           } catch (dbError) {
-            console.error("❌ Error saving SBI TT rate to database:", dbError);
-            // Continue even if database storage fails
+            console.error("❌ Error handling SBI TT rate database operation:", dbError);
+            // Continue even if database operation fails
           }
         }
       } catch (jsonError) {
@@ -76,14 +96,12 @@ export default async function handler(
       
       // Fetch the latest rate from the database
       try {
-        // Use raw SQL to fetch the latest rate
-        const latestRates = await prisma.$queryRaw<Array<{ id: number; date: Date; rate: number; createdAt: Date }>>`
-          SELECT * FROM "SBITTRate" 
-          ORDER BY "date" DESC 
-          LIMIT 1
-        `;
-        
-        const latestRate = latestRates[0];
+        // Use Prisma client to fetch the latest rate
+        const latestRate = await prisma.sBITTRate.findFirst({
+          orderBy: {
+            date: 'desc',
+          },
+        });
         
         if (latestRate) {
           console.log("✅ Using SBI TT rate from database");

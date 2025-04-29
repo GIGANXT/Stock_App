@@ -5,9 +5,30 @@ const prisma = new PrismaClient();
 
 interface ApiResponse {
   success: boolean;
-  data?: any;
+  data?: unknown;
   message?: string;
   error?: string;
+}
+
+// Define database record types for better type safety
+interface LMEWestMetalPrice {
+  id: number;
+  date: string;
+  Price: number;
+}
+
+interface RBIRate {
+  id: number;
+  date: string;
+  rate: number;
+}
+
+interface LMECashSettlement {
+  id: number;
+  date: string;
+  price: number;
+  Dollar_Difference: number;
+  INR_Difference: number;
 }
 
 export default async function handler(
@@ -34,11 +55,10 @@ export default async function handler(
       }
       
       // Standard GET request - retrieve LME cash settlements
-      const lmeCashData = await (prisma as any).lMECashSettlement.findMany({
-        orderBy: {
-          date: 'desc'
-        }
-      });
+      const lmeCashData = await prisma.$queryRaw<LMECashSettlement[]>`
+        SELECT * FROM "LMECashSettlement"
+        ORDER BY date DESC
+      `;
       
       return res.status(200).json({
         success: true,
@@ -55,7 +75,7 @@ export default async function handler(
       // Check if this is a data update notification
       if (req.body?.source === 'rbi_update' || req.body?.source === 'lme_west_update') {
         // Process the new data
-        await processNewData(req.body.source);
+        await processNewData();
         
         return res.status(200).json({
           success: true,
@@ -123,21 +143,16 @@ async function handleLmeWestUpdate(
   }
   
   // Create or update LME West Metal Price record
-  const lmeWestRecord = await (prisma as any).lME_West_Metal_Price.upsert({
-    where: {
-      date: date
-    },
-    update: {
-      Price: priceValue
-    },
-    create: {
-      date: date,
-      Price: priceValue
-    }
-  });
+  const lmeWestRecord = await prisma.$queryRaw<LMEWestMetalPrice[]>`
+    INSERT INTO "LME_West_Metal_Price" ("date", "Price")
+    VALUES (${date}, ${priceValue})
+    ON CONFLICT ("date") DO UPDATE
+    SET "Price" = ${priceValue}
+    RETURNING *
+  `;
   
   // Process the update immediately
-  await processNewData('lme_west_update');
+  await processNewData();
   
   return res.status(200).json({
     success: true,
@@ -175,21 +190,16 @@ async function handleRbiRateUpdate(
   }
   
   // Create or update RBI Rate record
-  const rbiRateRecord = await (prisma as any).rBI_Rate.upsert({
-    where: {
-      date: date
-    },
-    update: {
-      rate: rateValue
-    },
-    create: {
-      date: date,
-      rate: rateValue
-    }
-  });
+  const rbiRateRecord = await prisma.$queryRaw<RBIRate[]>`
+    INSERT INTO "RBI_Rate" ("date", "rate")
+    VALUES (${date}, ${rateValue})
+    ON CONFLICT ("date") DO UPDATE
+    SET "rate" = ${rateValue}
+    RETURNING *
+  `;
   
   // Process the update immediately
-  await processNewData('rbi_update');
+  await processNewData();
   
   return res.status(200).json({
     success: true,
@@ -231,38 +241,36 @@ async function handleSchedulerRequest(
 /**
  * Processes new data that has been added to one of the source tables
  */
-async function processNewData(source: string) {
+async function processNewData() {
   // Get the latest data from both tables
-  const latestLmeWest = await (prisma as any).lME_West_Metal_Price.findFirst({
-    orderBy: {
-      date: 'desc'
-    }
-  });
+  const latestLmeWest = await prisma.$queryRaw<LMEWestMetalPrice[]>`
+    SELECT * FROM "LME_West_Metal_Price"
+    ORDER BY date DESC
+    LIMIT 1
+  `;
   
-  const latestRbi = await (prisma as any).rBI_Rate.findFirst({
-    orderBy: {
-      date: 'desc'
-    }
-  });
+  const latestRbi = await prisma.$queryRaw<RBIRate[]>`
+    SELECT * FROM "RBI_Rate"
+    ORDER BY date DESC
+    LIMIT 1
+  `;
   
-  if (!latestLmeWest || !latestRbi) {
+  if (!latestLmeWest[0] || !latestRbi[0]) {
     console.log('Missing latest data from one of the tables, calculation skipped');
     return;
   }
   
   // Extract date part only from the LME West date (ignoring time)
-  const lmeWestDateOnly = latestLmeWest.date.split('T')[0];
+  const lmeWestDateOnly = latestLmeWest[0].date.split('T')[0];
   
   // Check if we have already processed this combination of data
-  const existingCalculation = await (prisma as any).lMECashSettlement.findFirst({
-    where: {
-      date: {
-        startsWith: lmeWestDateOnly
-      }
-    }
-  });
+  const existingCalculation = await prisma.$queryRaw<LMECashSettlement[]>`
+    SELECT * FROM "LMECashSettlement"
+    WHERE date::text LIKE ${lmeWestDateOnly + '%'}
+    LIMIT 1
+  `;
   
-  if (existingCalculation) {
+  if (existingCalculation[0]) {
     console.log('Calculation for the latest data already exists, no update needed');
     return;
   }
@@ -276,34 +284,28 @@ async function processNewData(source: string) {
  */
 async function checkForNewDataAndProcess() {
   // Get the latest processed date from LMECashSettlement
-  const latestProcessed = await (prisma as any).lMECashSettlement.findFirst({
-    orderBy: {
-      date: 'desc'
-    },
-    select: {
-      date: true
-    }
-  });
+  const latestProcessed = await prisma.$queryRaw<{date: string}[]>`
+    SELECT date FROM "LMECashSettlement"
+    ORDER BY date DESC
+    LIMIT 1
+  `;
   
   // Get the latest available LME West Metal Price
-  const latestLmeWest = await (prisma as any).lME_West_Metal_Price.findFirst({
-    orderBy: {
-      date: 'desc'
-    },
-    select: {
-      date: true
-    }
-  });
+  const latestLmeWest = await prisma.$queryRaw<{date: string}[]>`
+    SELECT date FROM "LME_West_Metal_Price"
+    ORDER BY date DESC
+    LIMIT 1
+  `;
   
-  if (!latestLmeWest) {
+  if (!latestLmeWest[0]) {
     return { processed: false, message: 'No LME West Metal Price data available' };
   }
   
   // Compare dates to see if we have new data to process - use only the date part
-  const processedDateOnly = latestProcessed ? latestProcessed.date.split('T')[0] : null;
-  const lmeWestDateOnly = latestLmeWest.date.split('T')[0];
+  const processedDateOnly = latestProcessed[0] ? latestProcessed[0].date.split('T')[0] : null;
+  const lmeWestDateOnly = latestLmeWest[0].date.split('T')[0];
   
-  if (!latestProcessed || processedDateOnly !== lmeWestDateOnly) {
+  if (!latestProcessed[0] || processedDateOnly !== lmeWestDateOnly) {
     // We have new data that hasn't been processed yet
     await calculateAndStoreLMECashSettlement();
     return { processed: true, message: 'New data detected and processed' };
@@ -314,88 +316,127 @@ async function checkForNewDataAndProcess() {
 
 async function calculateAndStoreLMECashSettlement() {
   // Get all LME West Metal Price records ordered by date
-  const lmeWestPrices = await (prisma as any).lME_West_Metal_Price.findMany({
-    orderBy: {
-      date: 'desc'
-    }
-  });
+  const lmeWestPrices = await prisma.$queryRaw<LMEWestMetalPrice[]>`
+    SELECT * FROM "LME_West_Metal_Price"
+    ORDER BY date DESC
+  `;
 
   if (lmeWestPrices.length < 2) {
     throw new Error('Insufficient data: Need at least two LME West Metal Price records');
   }
 
   // Get all RBI rate records ordered by date
-  const rbiRates = await (prisma as any).rBI_Rate.findMany({
-    orderBy: {
-      date: 'desc'
-    }
-  });
+  const rbiRates = await prisma.$queryRaw<RBIRate[]>`
+    SELECT * FROM "RBI_Rate"
+    ORDER BY date DESC
+  `;
 
   if (rbiRates.length < 2) {
     throw new Error('Insufficient data: Need at least two RBI Rate records');
   }
 
   // Latest data (today) - based on date only
-  const price_today = lmeWestPrices[0].Price;
-  const today_date_full = lmeWestPrices[0].date;
+  const today_record = lmeWestPrices[0];
+  const price_today = today_record.Price;
+  const today_date_full = today_record.date;
   const today_date_only = today_date_full.split('T')[0];
   
   // Find the latest RBI rate by date match (ignoring time)
-  const rbi_today_record = rbiRates.find((rate: any) => 
+  // If exact match not found, use the most recent available rate
+  const rbi_today_record = rbiRates.find((rate) => 
     rate.date.startsWith(today_date_only)
   ) || rbiRates[0]; // fallback to newest if exact match not found
   
   const rbi_today = rbi_today_record.rate;
 
-  // Previous data (yesterday) - find the previous date record
-  const yesterday_lme_record = lmeWestPrices.find((_: any, index: number) => index === 1);
-  const price_yesterday = yesterday_lme_record.Price;
-  const yesterday_date_only = yesterday_lme_record.date.split('T')[0];
+  // Find the most recent previous LME record (not today)
+  // Skip the first record (today's) and find the first previous record
+  let previous_lme_record = null;
   
-  // Find the RBI rate for yesterday by date match
-  const rbi_yesterday_record = rbiRates.find((rate: any) => 
-    rate.date.startsWith(yesterday_date_only)
-  ) || rbiRates[1]; // fallback to second newest if exact match not found
+  // Convert today's date to a Date object for comparison
+  const todayDate = new Date(today_date_only);
   
-  const rbi_yesterday = rbi_yesterday_record.rate;
-
-  // Calculate differences
-  // Dollar Difference = price_today - price_yesterday
-  const dollarDifference = price_today - price_yesterday;
-
-  // INR Difference = (price_today × RBI_today × 1.0825) - (price_yesterday × RBI_yesterday × 1.0825)
-  const inrDifference = (price_today * rbi_today * 1.0825) - (price_yesterday * rbi_yesterday * 1.0825);
-
-  // Check if record for this date already exists (using date part only)
-  const existingRecord = await (prisma as any).lMECashSettlement.findFirst({
-    where: {
-      date: {
-        startsWith: today_date_only
+  // Find the most recent record that's before today
+  for (let i = 1; i < lmeWestPrices.length; i++) {
+    const recordDate = new Date(lmeWestPrices[i].date.split('T')[0]);
+    if (recordDate < todayDate) {
+      previous_lme_record = lmeWestPrices[i];
+      break;
+    }
+  }
+  
+  if (!previous_lme_record) {
+    throw new Error('Could not find a previous LME West Metal Price record');
+  }
+  
+  const price_previous = previous_lme_record.Price;
+  const previous_date_only = previous_lme_record.date.split('T')[0];
+  
+  console.log(`Using previous LME record from ${previous_date_only} as comparison to ${today_date_only}`);
+  
+  // Find the RBI rate for the previous LME date (exact match)
+  let rbi_previous_record = rbiRates.find((rate) => 
+    rate.date.startsWith(previous_date_only)
+  );
+  
+  // If no exact match for previous date, find the most recent RBI rate before or on that date
+  if (!rbi_previous_record) {
+    // Convert previous LME date to a Date object for comparison
+    const previousLmeDate = new Date(previous_date_only);
+    
+    // Sort RBI rates by date (newest to oldest)
+    const sortedRbiRates = [...rbiRates].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    // Find the most recent RBI rate that's on or before the previous LME date
+    for (const rate of sortedRbiRates) {
+      const rbiDate = new Date(rate.date.split('T')[0]);
+      if (rbiDate <= previousLmeDate) {
+        rbi_previous_record = rate;
+        console.log(`Using nearest previous RBI rate from ${rate.date.split('T')[0]} for LME date ${previous_date_only}`);
+        break;
       }
     }
-  });
+  }
+  
+  if (!rbi_previous_record) {
+    throw new Error('Could not find a suitable previous RBI rate');
+  }
+  
+  const rbi_previous = rbi_previous_record.rate;
 
-  if (existingRecord) {
+  // Calculate differences
+  // Dollar Difference = price_today - price_previous
+  const dollarDifference = price_today - price_previous;
+
+  // INR Difference = (price_today × RBI_today × 1.0825) - (price_previous × rbi_previous × 1.0825)
+  const inrDifference = (price_today * rbi_today * 1.0825) - (price_previous * rbi_previous * 1.0825);
+
+  // Check if record for this date already exists (using date part only)
+  const existingRecord = await prisma.$queryRaw<LMECashSettlement[]>`
+    SELECT * FROM "LMECashSettlement"
+    WHERE date::text LIKE ${today_date_only + '%'}
+    LIMIT 1
+  `;
+
+  if (existingRecord[0]) {
     // Update existing record
-    return await (prisma as any).lMECashSettlement.update({
-      where: {
-        id: existingRecord.id
-      },
-      data: {
-        price: price_today,
-        Dollar_Difference: dollarDifference,
-        INR_Difference: inrDifference
-      }
-    });
+    return await prisma.$queryRaw<LMECashSettlement[]>`
+      UPDATE "LMECashSettlement"
+      SET 
+        "price" = ${price_today},
+        "Dollar_Difference" = ${dollarDifference},
+        "INR_Difference" = ${inrDifference}
+      WHERE id = ${existingRecord[0].id}
+      RETURNING *
+    `;
   } else {
     // Create new record
-    return await (prisma as any).lMECashSettlement.create({
-      data: {
-        date: today_date_full, // Keep the original date format
-        price: price_today,
-        Dollar_Difference: dollarDifference,
-        INR_Difference: inrDifference
-      }
-    });
+    return await prisma.$queryRaw<LMECashSettlement[]>`
+      INSERT INTO "LMECashSettlement" ("date", "price", "Dollar_Difference", "INR_Difference")
+      VALUES (${today_date_full}, ${price_today}, ${dollarDifference}, ${inrDifference})
+      RETURNING *
+    `;
   }
 }

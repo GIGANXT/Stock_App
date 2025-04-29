@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, Calendar, DollarSign } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, DollarSign, IndianRupee } from 'lucide-react';
 
 interface LMESettlementCardProps {
   basePrice?: number;
@@ -19,6 +19,9 @@ export default function LMESettlementCard({
   const totalPrice = basePrice;
   const trendColor = isIncrease ? "text-green-600" : "text-red-600";
   const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
+  
+  // Ensure spreadINR is properly displayed
+  const displayINR = typeof spreadINR === 'string' ? spreadINR : String(spreadINR || '0.00');
 
   return (
     <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
@@ -56,24 +59,25 @@ export default function LMESettlementCard({
               </span>
               <span className="text-xs text-gray-500">/MT</span>
             </div>
-
-            {/* Change Indicators */}
-            <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-1.5 md:mt-2 font-medium`}>
-              <TrendIcon className="w-4 h-4 flex-shrink-0 crisp-text" />
-              <span className="whitespace-nowrap crisp-text">
-                {isIncrease ? '+' : ''}{spread.toFixed(2)}
-              </span>
-            </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
-          <div className="font-bold">
-            {formattedDate}
+        {/* Dollar difference display */}
+        <div className="flex items-center gap-1.5 pt-1">
+          <TrendIcon className={`w-4 h-4 flex-shrink-0 crisp-text ${trendColor}`} />
+          <span className={`whitespace-nowrap crisp-text ${trendColor} font-medium`}>
+            {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
+          </span>
+        </div>
+
+        {/* INR Difference display below Dollar Difference */}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-1">
+            <IndianRupee className="w-3.5 h-3.5 text-gray-500" />
+            <span className="text-xs text-gray-500">INR Diff:</span>
           </div>
-          <div className={`${trendColor} font-medium`}>
-            {isIncrease ? '+' : '-'}₹{spreadINR}
+          <div className={`${trendColor} font-medium text-sm`}>
+            {isIncrease ? '+' : '-'}₹{displayINR}
           </div>
         </div>
       </div>

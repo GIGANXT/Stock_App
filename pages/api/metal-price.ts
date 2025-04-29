@@ -142,13 +142,13 @@ function processExternalData(externalData: ExternalApiData): ProcessedApiData {
   
   console.log(`Processed data: spotPrice=${spotPrice}, change=${change}, changePercent=${changePercent}, lastUpdated=${lastUpdated}, isCashSettlement=${isCashSettlement}`);
   
-  return {
+    return {
     spotPrice,
     change,
     changePercent,
     lastUpdated,
     isCashSettlement
-  };
+    };
 }
 
 // Type definition for database record with support for Prisma Decimal type
@@ -297,8 +297,8 @@ async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = 
         console.log(`Processed data: spotPrice=${spotPrice}, change=${change}, changePercent=${changePercent}`);
         
         // Always try to save to database
-        const formattedDate = new Date(lastUpdated || new Date());
-        
+          const formattedDate = new Date(lastUpdated || new Date());
+          
         try {
           console.log(`Saving to database: metal=${metal}, price=${spotPrice}, date=${formattedDate}`);
           await savePriceToDatabase(metal, spotPrice, change, changePercent, formattedDate);
@@ -307,17 +307,17 @@ async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = 
           console.error('Error saving to database:', saveErr);
           // Continue even if save fails
         }
-        
-        // Return the fresh data immediately
-        return {
-          type: 'spotPrice',
-          spotPrice: Number(spotPrice),
-          change: Number(change),
-          changePercent: Number(changePercent),
-          lastUpdated: formattedDate.toISOString(),
+          
+          // Return the fresh data immediately
+          return {
+            type: 'spotPrice',
+            spotPrice: Number(spotPrice),
+            change: Number(change),
+            changePercent: Number(changePercent),
+            lastUpdated: formattedDate.toISOString(),
           fresh: true,
           source: 'external'
-        };
+          };
       } catch (apiError) {
         console.error('External API error:', apiError);
         // If external API fails, fall back to database
@@ -968,18 +968,18 @@ export default async function handler(
       const bypassCache = true;
       
       console.log(`Fetching latest price for ${metalParam}, bypassCache=${bypassCache}`);
-      const priceData = await getLatestPriceWithRefresh(metalParam, bypassCache);
+        const priceData = await getLatestPriceWithRefresh(metalParam, bypassCache);
       
       console.log('Price data retrieved:', JSON.stringify(priceData));
-      
-      // Update cache
-      responseCache = {
-        data: { ...priceData, metal: metalParam },
+        
+        // Update cache
+        responseCache = {
+          data: { ...priceData, metal: metalParam },
         timestamp: Date.now(),
-        ttl: responseCache.ttl
-      };
-      
-      return res.status(200).json(priceData);
+          ttl: responseCache.ttl
+        };
+        
+        return res.status(200).json(priceData);
     } catch (error) {
       console.error('Error handling forceMetalPrice request:', error);
       return res.status(500).json({

@@ -111,7 +111,8 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
         
         // Add cache-busting query parameter and headers
         const timestamp = new Date().getTime();
-        const response = await fetch(`/api/lme-settlement?_t=${timestamp}&limit=10`, {
+        // Updated to use the correct API endpoint (lmecashcal)
+        const response = await fetch(`/api/lmecashcal?_t=${timestamp}&limit=10`, {
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
@@ -125,8 +126,14 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
         }
 
         const result = await response.json();
+        console.log("LME Cash Settlement API Response:", result);
+        
         if (result.success && Array.isArray(result.data)) {
-          setLmeData(result.data);
+          // Sort data by date in descending order (most recent first)
+          const sortedData = [...result.data].sort((a, b) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setLmeData(sortedData);
         } else {
           throw new Error('Invalid data format received from API');
         }
@@ -147,7 +154,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
     return () => clearInterval(intervalId);
   }, []);
 
-  // Format date from API data (e.g., "2023-05-30" to "30. May 2023")
+  // Format date from API data for display (e.g., "2023-04-28" to "28. April 2023")
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -156,14 +163,17 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
         return dateString; // Return original string if date is invalid
       }
       
-      const day = date.getDate();
-      const month = date.toLocaleString('en-US', { month: 'long' });
-      const year = date.getFullYear();
-      return `${day}. ${month} ${year}`;
+      // Format to match the UI in the image (25. April 2025 style)
+      return format(date, "d. MMMM yyyy");
     } catch (e) {
       console.error('Error formatting date:', e);
       return dateString; // Return original string if parsing fails
     }
+  };
+
+  // Format INR difference to properly display in the component
+  const formatINRDifference = (value: number): string => {
+    return Math.abs(value).toFixed(2);
   };
 
   // Apply custom slider styles
@@ -277,6 +287,21 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
     );
   };
 
+  // Update desktop card rendering structure to match mobile
+  const renderCard = (data: LMECashSettlementData, key: string) => {
+    return (
+      <div key={key} className="h-full">
+        <LMECashSettlement
+          basePrice={data.price}
+          spread={data.Dollar_Difference}
+          spreadINR={formatINRDifference(data.INR_Difference)}
+          isIncrease={data.Dollar_Difference > 0}
+          formattedDate={formatDate(data.date)}
+        />
+      </div>
+    );
+  };
+
   return (
     <section className="relative bg-gradient-to-br from-indigo-50/95 via-blue-50/95 to-sky-50/95 backdrop-blur-sm rounded-xl p-4 md:p-6 
       border border-indigo-100/50 shadow-[0_8px_16px_rgba(99,102,241,0.06)] hover:shadow-[0_12px_24px_rgba(99,102,241,0.08)] 
@@ -299,7 +324,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-1.5 px-3 rounded-md transition-colors flex items-center"
           >
             <Calendar className="w-4 h-4 mr-1.5" />
-            Today's LME Cash Settlement
+            Today&apos;s LME Cash Settlement
           </button>
         </div>
 
@@ -384,6 +409,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
                         {/* Footer */}
                         <div className="flex items-center justify-between pt-2">
                           <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
+                          <div className="h-3 w-16 bg-gray-200 animate-pulse rounded"></div>
                         </div>
                       </div>
                     </div>
@@ -400,18 +426,10 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
                   {renderEmptyContent()}
                 </div>
               ) : (
-                // Real data cards
+                // Real data cards - use the shared rendering function
                 lmeData.map((data, index) => (
                   <div key={`settlement-card-${index}`} className="h-full py-0.5 px-2">
-                    <div className="h-full">
-                      <LMECashSettlement
-                        basePrice={data.price}
-                        spread={data.Dollar_Difference}
-                        spreadINR={data.INR_Difference.toString()}
-                        isIncrease={data.Dollar_Difference > 0}
-                        formattedDate={formatDate(data.date)}
-                      />
-                    </div>
+                    {renderCard(data, `desktop-card-${index}`)}
                   </div>
                 ))
               )}
@@ -453,6 +471,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
                       {/* Footer */}
                       <div className="flex items-center justify-between pt-2">
                         <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
+                        <div className="h-3 w-16 bg-gray-200 animate-pulse rounded"></div>
                       </div>
                     </div>
                   </div>
@@ -464,7 +483,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
                 // Empty state
                 renderEmptyContent()
               ) : (
-                // Real data cards
+                // Real data cards - also use the shared rendering function
                 lmeData
                   .slice(0, expandedMobileView ? lmeData.length : 3)
                   .map((data, index) => (
@@ -472,13 +491,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
                       key={`mobile-card-${index}`}
                       id={`mobile-card-${index}`}
                     >
-                      <LMECashSettlement
-                        basePrice={data.price}
-                        spread={data.Dollar_Difference}
-                        spreadINR={data.INR_Difference.toString()}
-                        isIncrease={data.Dollar_Difference > 0}
-                        formattedDate={formatDate(data.date)}
-                      />
+                      {renderCard(data, `mobile-card-content-${index}`)}
                     </div>
                   ))
               )}
