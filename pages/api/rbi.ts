@@ -13,6 +13,7 @@ type ApiResponse = {
   success?: boolean;
   data?: ExchangeRate[];
   error?: string;
+  message?: string;
 };
 
 export default async function handler(
