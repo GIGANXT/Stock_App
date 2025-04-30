@@ -87,6 +87,30 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
     const timestamp = new Date(data.timestamp);
     const prices = Object.entries(data.prices);
     
+    // Check if a record with this exact timestamp already exists
+    const existingRecord = await prisma.aluminumSnapshot.findFirst({
+      where: { timestamp },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    if (existingRecord) {
+      console.log('Record with this timestamp already exists, checking for data changes');
+      
+      // If the record exists with the same data, skip saving
+      const hasSameData = 
+        (existingRecord.month1Label === Object.keys(data.prices)[0] || !Object.keys(data.prices)[0]) &&
+        (existingRecord.month2Label === Object.keys(data.prices)[1] || !Object.keys(data.prices)[1]) &&
+        (existingRecord.month3Label === Object.keys(data.prices)[2] || !Object.keys(data.prices)[2]) &&
+        (Number(existingRecord.month1Price) === parseFloat(data.prices[existingRecord.month1Label]?.price.toString() || '0')) &&
+        (Number(existingRecord.month2Price) === parseFloat(data.prices[existingRecord.month2Label]?.price.toString() || '0')) &&
+        (Number(existingRecord.month3Price) === parseFloat(data.prices[existingRecord.month3Label]?.price.toString() || '0'));
+      
+      if (hasSameData) {
+        console.log('Duplicate data detected in database, skipping save');
+        return null;
+      }
+    }
+    
     // Get the most recent record to use for any missing months
     let previousEntry: PreviousEntry[] | null = null;
     try {
@@ -112,7 +136,7 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
       console.error('Error fetching previous entry:', error);
       previousEntry = null;
     }
-    
+
     // Initialize with previous values if available, otherwise use defaults
     let month1Label = previousEntry?.[0]?.month1Label || '';
     let month1Price = previousEntry?.[0]?.month1Price || 0;
@@ -151,8 +175,8 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
           const { rateChange: m1RateVal, rateChangePercent: m1RatePct } = parseRateChange(month1Data.site_rate_change);
           
           // Check if data has changed
-          if (month1Label !== month1 || month1Price !== month1PriceNew || 
-              month1RateVal !== m1RateVal || month1RatePct !== m1RatePct) {
+          if (month1Label !== month1 || Math.abs(month1Price - month1PriceNew) > 0.001 || 
+              Math.abs(month1RateVal - m1RateVal) > 0.001 || Math.abs(month1RatePct - m1RatePct) > 0.001) {
             hasNewData = true;
           }
           
@@ -171,8 +195,8 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
           const { rateChange: m2RateVal, rateChangePercent: m2RatePct } = parseRateChange(month2Data.site_rate_change);
           
           // Check if data has changed
-          if (month2Label !== month2 || month2Price !== month2PriceNew || 
-              month2RateVal !== m2RateVal || month2RatePct !== m2RatePct) {
+          if (month2Label !== month2 || Math.abs(month2Price - month2PriceNew) > 0.001 || 
+              Math.abs(month2RateVal - m2RateVal) > 0.001 || Math.abs(month2RatePct - m2RatePct) > 0.001) {
             hasNewData = true;
           }
           
@@ -191,8 +215,8 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
           const { rateChange: m3RateVal, rateChangePercent: m3RatePct } = parseRateChange(month3Data.site_rate_change);
           
           // Check if data has changed
-          if (month3Label !== month3 || month3Price !== month3PriceNew || 
-              month3RateVal !== m3RateVal || month3RatePct !== m3RatePct) {
+          if (month3Label !== month3 || Math.abs(month3Price - month3PriceNew) > 0.001 || 
+              Math.abs(month3RateVal - m3RateVal) > 0.001 || Math.abs(month3RatePct - m3RatePct) > 0.001) {
             hasNewData = true;
           }
           
@@ -217,11 +241,11 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
     if (lastProcessedData && 
         lastProcessedData.timestamp === data.timestamp &&
         lastProcessedData.month1Label === month1Label && 
-        lastProcessedData.month1Price === month1Price &&
+        Math.abs(lastProcessedData.month1Price - month1Price) < 0.001 &&
         lastProcessedData.month2Label === month2Label &&
-        lastProcessedData.month2Price === month2Price &&
+        Math.abs(lastProcessedData.month2Price - month2Price) < 0.001 &&
         lastProcessedData.month3Label === month3Label &&
-        lastProcessedData.month3Price === month3Price) {
+        Math.abs(lastProcessedData.month3Price - month3Price) < 0.001) {
       console.log('Duplicate data detected in memory cache, skipping save');
       return null;
     }
@@ -236,6 +260,23 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
       month3Label,
       month3Price
     };
+
+    // Add rate limiting to prevent too frequent updates for the same timestamp
+    const now = new Date();
+    const fiveSecondsAgo = new Date(now.getTime() - 5000);
+    
+    const recentRecords = await prisma.aluminumSnapshot.count({
+      where: {
+        createdAt: {
+          gte: fiveSecondsAgo
+        }
+      }
+    });
+    
+    if (recentRecords > 0) {
+      console.log('Rate limiting: too many recent updates, skipping this one');
+      return null;
+    }
 
     // Save the data with available months and previous values for missing months
     console.log('Storing partial data update for timestamp:', data.timestamp);
