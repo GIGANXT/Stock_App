@@ -81,46 +81,13 @@ function parseRateChange(rateChangeStr: string): { rateChange: number; rateChang
   return { rateChange, rateChangePercent };
 }
 
-// Helper function to store data in the database
+// Helper function to store data in the database, supporting partial updates
 async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null> {
   try {
     const timestamp = new Date(data.timestamp);
     const prices = Object.entries(data.prices);
     
-    if (prices.length < 3) {
-      console.log('Expected at least 3 months of data, received:', prices.length);
-      return null;
-    }
-
-    const [month1, month2, month3] = prices;
-    
-    const month1Price = parseFloat(month1[1].price.toString());
-    const month2Price = parseFloat(month2[1].price.toString());
-    const month3Price = parseFloat(month3[1].price.toString());
-
-    if (isNaN(month1Price) || isNaN(month2Price) || isNaN(month3Price)) {
-      console.log('Invalid price values in data');
-      return null;
-    }
-
-    // Check against in-memory cache first for quick duplicate detection
-    if (lastProcessedData && 
-        lastProcessedData.timestamp === data.timestamp &&
-        lastProcessedData.month1Label === month1[0] && 
-        lastProcessedData.month1Price === month1Price &&
-        lastProcessedData.month2Label === month2[0] &&
-        lastProcessedData.month2Price === month2Price &&
-        lastProcessedData.month3Label === month3[0] &&
-        lastProcessedData.month3Price === month3Price) {
-      console.log('Duplicate data detected in memory cache, skipping save');
-      return null;
-    }
-    
-    const month1Data = parseRateChange(month1[1].site_rate_change);
-    const month2Data = parseRateChange(month2[1].site_rate_change);
-    const month3Data = parseRateChange(month3[1].site_rate_change);
-
-    // Get the most recent entry from the database with explicit type handling
+    // Get the most recent record to use for any missing months
     let previousEntry: PreviousEntry[] | null = null;
     try {
       previousEntry = await prisma.$queryRaw<PreviousEntry[]>`
@@ -143,65 +110,150 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
       `;
     } catch (error) {
       console.error('Error fetching previous entry:', error);
-      // If there's an error fetching the previous entry, proceed with storing new data
       previousEntry = null;
     }
-
-    // Check if the new data is different from the previous entry
-    if (previousEntry && previousEntry.length > 0) {
-      const prev = previousEntry[0];
+    
+    // Initialize with previous values if available, otherwise use defaults
+    let month1Label = previousEntry?.[0]?.month1Label || '';
+    let month1Price = previousEntry?.[0]?.month1Price || 0;
+    let month1RateVal = previousEntry?.[0]?.month1RateVal || 0;
+    let month1RatePct = previousEntry?.[0]?.month1RatePct || 0;
+    
+    let month2Label = previousEntry?.[0]?.month2Label || '';
+    let month2Price = previousEntry?.[0]?.month2Price || 0;
+    let month2RateVal = previousEntry?.[0]?.month2RateVal || 0;
+    let month2RatePct = previousEntry?.[0]?.month2RatePct || 0;
+    
+    let month3Label = previousEntry?.[0]?.month3Label || '';
+    let month3Price = previousEntry?.[0]?.month3Price || 0;
+    let month3RateVal = previousEntry?.[0]?.month3RateVal || 0;
+    let month3RatePct = previousEntry?.[0]?.month3RatePct || 0;
+    
+    // Flag to track if any data has changed
+    let hasNewData = false;
+    
+    // Update the available months from the new data
+    if (prices.length > 0) {
+      console.log(`Found ${prices.length} month(s) in new data`);
       
-      // More strict comparison with epsilon for floating point
-      const floatEquals = (a: number, b: number, epsilon = 0.0001) => Math.abs(a - b) < epsilon;
+      // Sort contracts by month/year
+      const sortedPrices = [...prices].sort((a, b) => {
+        const aMonth = a[0]; // e.g. "JUN24" or "June24"
+        const bMonth = b[0];
+        return aMonth.localeCompare(bMonth);
+      });
       
-      const isSameData = 
-        prev.month1Label === month1[0] &&
-        floatEquals(Number(prev.month1Price), month1Price) &&
-        floatEquals(Number(prev.month1RateVal), month1Data.rateChange) &&
-        floatEquals(Number(prev.month1RatePct), month1Data.rateChangePercent) &&
-        prev.month2Label === month2[0] &&
-        floatEquals(Number(prev.month2Price), month2Price) &&
-        floatEquals(Number(prev.month2RateVal), month2Data.rateChange) &&
-        floatEquals(Number(prev.month2RatePct), month2Data.rateChangePercent) &&
-        prev.month3Label === month3[0] &&
-        floatEquals(Number(prev.month3Price), month3Price) &&
-        floatEquals(Number(prev.month3RateVal), month3Data.rateChange) &&
-        floatEquals(Number(prev.month3RatePct), month3Data.rateChangePercent);
-
-      if (isSameData) {
-        console.log('New data is identical to previous entry in database, skipping save');
+      // Update month 1 if available
+      if (sortedPrices[0]) {
+        const [month1, month1Data] = sortedPrices[0];
+        const month1PriceNew = parseFloat(month1Data.price.toString());
+        if (!isNaN(month1PriceNew)) {
+          const { rateChange: m1RateVal, rateChangePercent: m1RatePct } = parseRateChange(month1Data.site_rate_change);
+          
+          // Check if data has changed
+          if (month1Label !== month1 || month1Price !== month1PriceNew || 
+              month1RateVal !== m1RateVal || month1RatePct !== m1RatePct) {
+            hasNewData = true;
+          }
+          
+          month1Label = month1;
+          month1Price = month1PriceNew;
+          month1RateVal = m1RateVal;
+          month1RatePct = m1RatePct;
+        }
+      }
+      
+      // Update month 2 if available
+      if (sortedPrices[1]) {
+        const [month2, month2Data] = sortedPrices[1];
+        const month2PriceNew = parseFloat(month2Data.price.toString());
+        if (!isNaN(month2PriceNew)) {
+          const { rateChange: m2RateVal, rateChangePercent: m2RatePct } = parseRateChange(month2Data.site_rate_change);
+          
+          // Check if data has changed
+          if (month2Label !== month2 || month2Price !== month2PriceNew || 
+              month2RateVal !== m2RateVal || month2RatePct !== m2RatePct) {
+            hasNewData = true;
+          }
+          
+          month2Label = month2;
+          month2Price = month2PriceNew;
+          month2RateVal = m2RateVal;
+          month2RatePct = m2RatePct;
+        }
+      }
+      
+      // Update month 3 if available
+      if (sortedPrices[2]) {
+        const [month3, month3Data] = sortedPrices[2];
+        const month3PriceNew = parseFloat(month3Data.price.toString());
+        if (!isNaN(month3PriceNew)) {
+          const { rateChange: m3RateVal, rateChangePercent: m3RatePct } = parseRateChange(month3Data.site_rate_change);
+          
+          // Check if data has changed
+          if (month3Label !== month3 || month3Price !== month3PriceNew || 
+              month3RateVal !== m3RateVal || month3RatePct !== m3RatePct) {
+            hasNewData = true;
+          }
+          
+          month3Label = month3;
+          month3Price = month3PriceNew;
+          month3RateVal = m3RateVal;
+          month3RatePct = m3RatePct;
+        }
+      }
+    }
+    
+    // If no data has changed, skip saving
+    if (!hasNewData) {
+      console.log('No new data detected, skipping save');
+      if (previousEntry && previousEntry.length > 0) {
+        // Return the existing record to avoid unnecessary database writes
         return null;
       }
+    }
+    
+    // Check against in-memory cache for duplicate detection
+    if (lastProcessedData && 
+        lastProcessedData.timestamp === data.timestamp &&
+        lastProcessedData.month1Label === month1Label && 
+        lastProcessedData.month1Price === month1Price &&
+        lastProcessedData.month2Label === month2Label &&
+        lastProcessedData.month2Price === month2Price &&
+        lastProcessedData.month3Label === month3Label &&
+        lastProcessedData.month3Price === month3Price) {
+      console.log('Duplicate data detected in memory cache, skipping save');
+      return null;
     }
 
     // Update memory cache with this new data
     lastProcessedData = {
       timestamp: data.timestamp,
-      month1Label: month1[0],
+      month1Label,
       month1Price,
-      month2Label: month2[0],
+      month2Label,
       month2Price,
-      month3Label: month3[0],
+      month3Label,
       month3Price
     };
 
-    // If data is different or no previous entry exists, save the new data
-    console.log('Storing new data for timestamp:', data.timestamp);
+    // Save the data with available months and previous values for missing months
+    console.log('Storing partial data update for timestamp:', data.timestamp);
     return await prisma.aluminumSnapshot.create({
       data: {
         timestamp,
-        month1Label: month1[0],
+        month1Label,
         month1Price,
-        month1RateVal: month1Data.rateChange,
-        month1RatePct: month1Data.rateChangePercent,
-        month2Label: month2[0],
+        month1RateVal,
+        month1RatePct,
+        month2Label,
         month2Price,
-        month2RateVal: month2Data.rateChange,
-        month2RatePct: month2Data.rateChangePercent,
-        month3Label: month3[0],
+        month2RateVal,
+        month2RatePct,
+        month3Label,
         month3Price,
-        month3RateVal: month3Data.rateChange,
-        month3RatePct: month3Data.rateChangePercent,
+        month3RateVal,
+        month3RatePct,
       },
     });
   } catch (error) {

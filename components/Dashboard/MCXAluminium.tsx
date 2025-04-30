@@ -369,15 +369,6 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             gradient: "from-blue-600 to-purple-600"
           },
           {
-            label: data.month2Label,
-            price: data.month2Price,
-            rateVal: data.month2RateVal,
-            ratePct: data.month2RatePct,
-            colorClass: "bg-purple-50 border-purple-100",
-            textClass: "text-purple-800",
-            gradient: "from-purple-600 to-pink-600"
-          },
-          {
             label: data.month3Label,
             price: data.month3Price,
             rateVal: data.month3RateVal,
@@ -385,6 +376,15 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             colorClass: "bg-pink-50 border-pink-100",
             textClass: "text-pink-800",
             gradient: "from-pink-600 to-rose-600"
+          },
+          {
+            label: data.month2Label,
+            price: data.month2Price,
+            rateVal: data.month2RateVal,
+            ratePct: data.month2RatePct,
+            colorClass: "bg-purple-50 border-purple-100",
+            textClass: "text-purple-800",
+            gradient: "from-purple-600 to-pink-600"
           }
         ].map((item, index) => (
           <div key={index} className={`${item.colorClass} rounded-lg p-3 border`}>
@@ -505,19 +505,19 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             showDivider={false}
           />
           <ContractPrice
-            label={data.month2Label}
-            price={data.month2Price}
-            rateVal={data.month2RateVal}
-            ratePct={data.month2RatePct}
-            gradient="from-purple-600 to-pink-600"
-            showDivider={false}
-          />
-          <ContractPrice
             label={data.month3Label}
             price={data.month3Price}
             rateVal={data.month3RateVal}
             ratePct={data.month3RatePct}
             gradient="from-pink-600 to-rose-600"
+            showDivider={false}
+          />
+          <ContractPrice
+            label={data.month2Label}
+            price={data.month2Price}
+            rateVal={data.month2RateVal}
+            ratePct={data.month2RatePct}
+            gradient="from-purple-600 to-pink-600"
             showDivider={false}
           />
         </div>
@@ -532,18 +532,18 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             gradient="from-blue-600 to-purple-600"
           />
           <ContractPrice
-            label={data.month2Label}
-            price={data.month2Price}
-            rateVal={data.month2RateVal}
-            ratePct={data.month2RatePct}
-            gradient="from-purple-600 to-pink-600"
-          />
-          <ContractPrice
             label={data.month3Label}
             price={data.month3Price}
             rateVal={data.month3RateVal}
             ratePct={data.month3RatePct}
             gradient="from-pink-600 to-rose-600"
+          />
+          <ContractPrice
+            label={data.month2Label}
+            price={data.month2Price}
+            rateVal={data.month2RateVal}
+            ratePct={data.month2RatePct}
+            gradient="from-purple-600 to-pink-600"
             showDivider={false}
           />
         </div>
