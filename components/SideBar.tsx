@@ -158,14 +158,6 @@ export default function Sidebar({
             <ChevronLeft className="w-4 h-4 text-gray-600" />
           )}
         </button>
-
-        {/* Close Button - Mobile Only */}
-        <button
-          onClick={onMobileClose}
-          className="absolute top-4 right-4 p-1.5 rounded-full bg-white/80 backdrop-blur-sm border border-white/50 shadow-md md:hidden hover:shadow-lg transition-all duration-200"
-        >
-          <X className="w-4 h-4 text-gray-600" />
-        </button>
         
         {/* Logo or Brand */}
         <div className="p-4 border-b border-white/30 flex items-center justify-center">

@@ -74,29 +74,29 @@ async function fetchExternalPriceData(): Promise<ExternalApiData> {
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
     
     try {
-      const response = await fetch(apiEndpoint, {
+    const response = await fetch(apiEndpoint, {
         signal: controller.signal,
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`External API returned status ${response.status}: ${errorText}`);
-        throw new Error(`External API returned status ${response.status}: ${errorText}`);
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       }
+    });
       
-      const data: ExternalApiData = await response.json();
-      console.log('Successfully fetched external API data:', JSON.stringify(data));
-      return data;
-    } catch (error) {
       clearTimeout(timeoutId);
-      throw error;
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`External API returned status ${response.status}: ${errorText}`);
+      throw new Error(`External API returned status ${response.status}: ${errorText}`);
+    }
+    
+    const data: ExternalApiData = await response.json();
+    console.log('Successfully fetched external API data:', JSON.stringify(data));
+    return data;
+  } catch (error) {
+      clearTimeout(timeoutId);
+    throw error;
     }
   } catch (error) {
     console.error('Error fetching from external API:', error);
@@ -156,13 +156,13 @@ function processExternalData(externalData: ExternalApiData): ProcessedApiData {
   
   console.log(`Processed data: spotPrice=${spotPrice}, change=${change}, changePercent=${changePercent}, lastUpdated=${lastUpdated}, isCashSettlement=${isCashSettlement}`);
   
-  return {
+    return {
     spotPrice,
     change,
     changePercent,
     lastUpdated,
     isCashSettlement
-  };
+    };
 }
 
 // Type definition for database record with support for Prisma Decimal type
@@ -299,28 +299,28 @@ async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = 
         
         // Only save to database if we have valid data (non-zero spotPrice)
         if (spotPrice > 0) {
-          // Always save to database when forcing refresh, regardless of settings
-          const formattedDate = new Date(lastUpdated || new Date());
-          
-          try {
-            console.log(`Explicitly saving to database: metal=${metal}, price=${spotPrice}, date=${formattedDate}`);
-            await savePriceToDatabase(metal, spotPrice, change, changePercent, formattedDate);
-            console.log('Successfully saved new price data to database');
-          } catch (saveErr) {
-            console.error('Error saving to database:', saveErr);
-            // Continue even if save fails
-          }
-          
-          // Return the fresh data immediately
-          return {
-            type: 'spotPrice',
-            spotPrice: Number(spotPrice),
-            change: Number(change),
-            changePercent: Number(changePercent),
-            lastUpdated: formattedDate.toISOString(),
-            fresh: true,
-            source: 'external'
-          };
+        // Always save to database when forcing refresh, regardless of settings
+        const formattedDate = new Date(lastUpdated || new Date());
+        
+        try {
+          console.log(`Explicitly saving to database: metal=${metal}, price=${spotPrice}, date=${formattedDate}`);
+          await savePriceToDatabase(metal, spotPrice, change, changePercent, formattedDate);
+          console.log('Successfully saved new price data to database');
+        } catch (saveErr) {
+          console.error('Error saving to database:', saveErr);
+          // Continue even if save fails
+        }
+        
+        // Return the fresh data immediately
+        return {
+          type: 'spotPrice',
+          spotPrice: Number(spotPrice),
+          change: Number(change),
+          changePercent: Number(changePercent),
+          lastUpdated: formattedDate.toISOString(),
+          fresh: true,
+          source: 'external'
+        };
         } else {
           console.log('External API returned invalid data (zero price), falling back to database');
           throw new Error('External API returned invalid data');
@@ -343,9 +343,9 @@ async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = 
     console.log(`Database check result: ${latestPrice ? 'Found data' : 'No data'}`);
     
     // If no data in database, handle gracefully
-    if (!latestPrice) {
+      if (!latestPrice) {
       console.log('No data in database, returning graceful no-data response');
-      return {
+          return {
         type: 'noData',
         error: 'No price data available',
         message: 'No price data could be retrieved from database or external API',
@@ -354,15 +354,15 @@ async function getLatestPriceWithRefresh(metal: string, forceRefresh: boolean = 
     }
     
     // Return database data
-    console.log(`Returning database data: spotPrice=${latestPrice.spotPrice}, date=${latestPrice.lastUpdated}`);
-    return {
-      type: 'spotPrice',
-      spotPrice: Number(latestPrice.spotPrice),
-      change: Number(latestPrice.change),
-      changePercent: Number(latestPrice.changePercent),
-      lastUpdated: latestPrice.lastUpdated.toISOString(),
-      source: 'database'
-    };
+      console.log(`Returning database data: spotPrice=${latestPrice.spotPrice}, date=${latestPrice.lastUpdated}`);
+      return {
+        type: 'spotPrice',
+        spotPrice: Number(latestPrice.spotPrice),
+        change: Number(latestPrice.change),
+        changePercent: Number(latestPrice.changePercent),
+        lastUpdated: latestPrice.lastUpdated.toISOString(),
+        source: 'database'
+      };
   } catch (error) {
     console.error('Error getting price data:', error);
     throw error;

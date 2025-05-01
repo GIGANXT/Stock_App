@@ -65,12 +65,12 @@ export default function LMECashSettlement({
         {/* Dollar difference display with INR value */}
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-1.5">
-            <TrendIcon className={`w-4 h-4 flex-shrink-0 crisp-text ${trendColor}`} />
-            <span className={`whitespace-nowrap crisp-text ${trendColor} font-medium`}>
-              {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
-            </span>
-          </div>
-          
+          <TrendIcon className={`w-4 h-4 flex-shrink-0 crisp-text ${trendColor}`} />
+          <span className={`whitespace-nowrap crisp-text ${trendColor} font-medium`}>
+            {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
+          </span>
+        </div>
+
           <div className={`${trendColor} font-medium text-sm flex items-center gap-1`}>
             <span>{isIncrease ? '+' : '-'}₹{displayINR}</span>
           </div>

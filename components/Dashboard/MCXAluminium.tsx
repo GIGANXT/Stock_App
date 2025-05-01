@@ -3,7 +3,6 @@ import {
   Calendar,
   TrendingUp,
   TrendingDown,
-  Clock,
   Maximize2,
   RefreshCw,
   BarChart2,
@@ -42,24 +41,6 @@ const updateSharedMCXPrice = (
     
     console.log('Updated shared MCX price data:', window.sharedMCXPrice);
   }
-};
-
-const MCXClock = () => {
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  React.useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="flex items-center gap-1 text-xs text-gray-600">
-      <Clock className="w-3 h-3" />
-      <span>{format(currentTime, "HH:mm:ss")}</span>
-    </div>
-  );
 };
 
 interface AluminiumData {
@@ -347,7 +328,6 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <MCXClock />
           <button
             onClick={fetchData}
             className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full"
@@ -476,7 +456,6 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <MCXClock />
           <button
             onClick={fetchData}
             className="p-1 hover:bg-gray-100 rounded-full text-gray-600"

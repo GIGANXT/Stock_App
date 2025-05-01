@@ -42,10 +42,24 @@ export default async function handler(
     });
     
     if (latestRates && latestRates.length > 0) {
-      const data = latestRates.map(rate => ({
-        date: rate.date,
-        rate: rate.rate.toString()
-      }));
+      const data = latestRates.map(rate => {
+        // Correct any future years in the date string
+        let dateString = rate.date;
+        const dateParts = dateString.split('-');
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[2]);
+          // If year is in the future, correct it to current year
+          if (year > new Date().getFullYear()) {
+            const currentYear = new Date().getFullYear();
+            dateString = `${dateParts[0]}-${dateParts[1]}-${currentYear}`;
+          }
+        }
+        
+        return {
+          date: dateString,
+          rate: rate.rate.toString()
+        };
+      });
       
       return res.status(200).json({ success: true, data });
     } else {
@@ -76,41 +90,63 @@ async function fetchAndStoreExternalData() {
     
     const data = apiResponse.data;
     
+    console.log("Received data from RBI scraper:", JSON.stringify(data));
+    
     // Store the data in the database
     if (data && data.length > 0) {
       console.log("Storing RBI rates in database");
       
       // Process each entry and add to database
       for (const entry of data) {
+        // Check if date has correct year
+        let dateString = entry.date;
         const rate = parseFloat(entry.rate);
+        
+        // Validate and correct the year if necessary
+        const dateParts = dateString.split('-');
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[2]);
+          // If year is in the future (like 2025), correct it to current year
+          if (year > new Date().getFullYear()) {
+            const currentYear = new Date().getFullYear();
+            dateString = `${dateParts[0]}-${dateParts[1]}-${currentYear}`;
+            console.log(`Corrected future year in date: ${entry.date} -> ${dateString}`);
+          }
+        }
+        
+        console.log(`Processing RBI rate for date: ${dateString}, rate: ${rate}`);
         
         // Check if record already exists for this date
         const existingRecord = await prisma.rBI_Rate.findUnique({
           where: {
-            date: entry.date
+            date: dateString
           }
         });
         
         if (existingRecord) {
           // Update the existing record if needed
-          await prisma.rBI_Rate.update({
-            where: {
-              date: entry.date
-            },
-            data: {
-              rate: rate
-            }
-          });
-          console.log(`Updated RBI rate for ${entry.date}`);
+          if (existingRecord.rate !== rate) {
+            await prisma.rBI_Rate.update({
+              where: {
+                date: dateString
+              },
+              data: {
+                rate: rate
+              }
+            });
+            console.log(`Updated RBI rate for ${dateString} from ${existingRecord.rate} to ${rate}`);
+          } else {
+            console.log(`No change in RBI rate for ${dateString}, skipping update`);
+          }
         } else {
           // Create a new record
           await prisma.rBI_Rate.create({
             data: {
-              date: entry.date,
+              date: dateString,
               rate: rate
             }
           });
-          console.log(`Added new RBI rate for ${entry.date}`);
+          console.log(`Added new RBI rate for ${dateString}: ${rate}`);
         }
       }
     }

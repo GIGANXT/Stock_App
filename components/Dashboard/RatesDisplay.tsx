@@ -108,6 +108,8 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       const response = await fetch("/api/rbi"); // Calls your Next.js API to get data from the database
       const result = await response.json();
 
+      console.log("🔍 Response from RBI API:", result);
+
       if (!response.ok) {
         throw new Error(result.error || "Failed to fetch data");
       }
@@ -118,8 +120,41 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         
         // Set RBI update date if available in the response
         if (result.data[0].date && isValidDate(result.data[0].date)) {
-          setRbiUpdated(new Date(result.data[0].date));
+          console.log("Using date from RBI API response:", result.data[0].date);
+          
+          // Parse the date string properly (dd-MMM-yyyy format)
+          const dateParts = result.data[0].date.split('-');
+          if (dateParts.length === 3) {
+            try {
+              // Convert month name to month number
+              const monthMap: { [key: string]: number } = {
+                'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+              };
+              
+              const day = parseInt(dateParts[0]);
+              const month = monthMap[dateParts[1]] !== undefined ? monthMap[dateParts[1]] : parseInt(dateParts[1]) - 1;
+              const year = parseInt(dateParts[2]);
+              
+              const parsedDate = new Date(year, month, day);
+              console.log("Parsed RBI date:", parsedDate);
+              
+              if (isValidDate(parsedDate)) {
+                setRbiUpdated(parsedDate);
+              } else {
+                console.error("Invalid date after parsing:", parsedDate);
+                setRbiUpdated(new Date());
+              }
+            } catch (err) {
+              console.error("Error parsing RBI date:", err);
+              setRbiUpdated(new Date());
+            }
+          } else {
+            console.log("Setting RBI date directly from string:", result.data[0].date);
+            setRbiUpdated(new Date(result.data[0].date));
+          }
         } else {
+          console.log("No valid date in RBI API response, using current date");
           setRbiUpdated(new Date());
         }
         
@@ -160,8 +195,10 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
         
         // Set SBI update date if available in the response
         if (result.data[0].timestamp && isValidDate(result.data[0].timestamp)) {
+          console.log("Using timestamp from API response:", result.data[0].timestamp);
           setLastUpdated(new Date(result.data[0].timestamp));
         } else {
+          console.log("No valid timestamp in API response, using current date");
           setLastUpdated(new Date());
         }
         

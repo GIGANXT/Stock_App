@@ -58,6 +58,11 @@ const TopCards = () => {
                 margin-bottom: 0.25rem !important;
               }
               
+              /* Hide the Clock component if it's still present in HTML */
+              .mcx-top-card-wrapper > div div:has(.w-3.h-3[class*="lucide-clock"]) {
+                display: none !important;
+              }
+              
               /* Show all month prices on mobile */
               .mcx-top-card-wrapper .hidden.sm\\:flex {
                 display: flex !important;
