@@ -16,6 +16,10 @@ type ApiResponse = {
   message?: string;
 };
 
+// Cache to prevent too frequent API calls
+let lastFetchAttempt = 0;
+const REFRESH_INTERVAL = 3600000; // 1 hour in milliseconds
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<ApiResponse>
@@ -24,24 +28,39 @@ export default async function handler(
     // Check if this is a background refresh request from a scheduler/cron job
     const isBackgroundUpdate = req.query.backgroundUpdate === 'true';
     
-    // If it's a background update, fetch from the external API and store in DB
-    if (isBackgroundUpdate) {
+    // Check if we should attempt to fetch fresh data
+    const now = Date.now();
+    const timeSinceLastFetch = now - lastFetchAttempt;
+    const shouldFetchFreshData = isBackgroundUpdate || timeSinceLastFetch > REFRESH_INTERVAL;
+    
+    // If it's a background update or enough time has passed, fetch from external API
+    if (shouldFetchFreshData) {
+      lastFetchAttempt = now;
+      console.log("Attempting to refresh RBI data from external API");
       await fetchAndStoreExternalData();
-      return res.status(200).json({ 
-        success: true,
-        message: "Background update completed"
-      });
+      
+      if (isBackgroundUpdate) {
+        return res.status(200).json({ 
+          success: true,
+          message: "Background update completed"
+        });
+      }
     }
     
-    // For frontend requests, only retrieve from database
+    // For all requests, retrieve from database
     const latestRates = await prisma.rBI_Rate.findMany({
-      orderBy: {
-        date: 'desc'
-      },
+      orderBy: [
+        // Sort by createdAt DESC first to get the most recently added records
+        { createdAt: 'desc' },
+        // Then sort by date in descending order (newest first)
+        { date: 'desc' }
+      ],
       take: 10 // Get the latest 10 records
     });
     
     if (latestRates && latestRates.length > 0) {
+      console.log(`Retrieved ${latestRates.length} RBI rates, latest is:`, latestRates[0]);
+      
       const data = latestRates.map(rate => {
         // Correct any future years in the date string
         let dateString = rate.date;
@@ -63,7 +82,31 @@ export default async function handler(
       
       return res.status(200).json({ success: true, data });
     } else {
-      // If no data in database, return an appropriate message
+      // If no data in database, force an API fetch
+      console.log("No RBI rate data in database, forcing API fetch");
+      await fetchAndStoreExternalData();
+      
+      // Try again to retrieve from database
+      const latestRatesRetry = await prisma.rBI_Rate.findMany({
+        orderBy: [
+          { createdAt: 'desc' },
+          { date: 'desc' }
+        ],
+        take: 10
+      });
+      
+      if (latestRatesRetry && latestRatesRetry.length > 0) {
+        console.log(`After fetch, retrieved ${latestRatesRetry.length} RBI rates, latest is:`, latestRatesRetry[0]);
+        
+        const data = latestRatesRetry.map(rate => ({
+          date: rate.date,
+          rate: rate.rate.toString()
+        }));
+        
+        return res.status(200).json({ success: true, data });
+      }
+      
+      // If still no data, return an error
       return res.status(404).json({ 
         success: false,
         error: "No RBI rate data available in database"
@@ -81,13 +124,25 @@ export default async function handler(
 async function fetchAndStoreExternalData() {
   try {
     console.log("Fetching from external RBI API");
-    const response = await fetch("http://148.135.138.22:5000/scrape");
-    const apiResponse = await response.json();
-
+    
+    // Create an AbortController with a timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch("http://148.135.138.22:5000/scrape", {
+      signal: controller.signal
+    });
+    
+    // Clear the timeout
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      throw new Error(apiResponse.error || "Failed to fetch data from external API");
+      const text = await response.text();
+      console.error("External API error:", text);
+      throw new Error(`Failed to fetch data from external API: ${response.status} ${response.statusText}`);
     }
     
+    const apiResponse = await response.json();
     const data = apiResponse.data;
     
     console.log("Received data from RBI scraper:", JSON.stringify(data));
@@ -101,6 +156,11 @@ async function fetchAndStoreExternalData() {
         // Check if date has correct year
         let dateString = entry.date;
         const rate = parseFloat(entry.rate);
+        
+        if (isNaN(rate)) {
+          console.log(`Invalid rate for ${dateString}, skipping`);
+          continue;
+        }
         
         // Validate and correct the year if necessary
         const dateParts = dateString.split('-');
@@ -125,7 +185,7 @@ async function fetchAndStoreExternalData() {
         
         if (existingRecord) {
           // Update the existing record if needed
-          if (existingRecord.rate !== rate) {
+          if (Math.abs(existingRecord.rate - rate) > 0.0001) {
             await prisma.rBI_Rate.update({
               where: {
                 date: dateString

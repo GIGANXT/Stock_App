@@ -8,7 +8,7 @@ import {
   BarChart2,
   LineChart,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
@@ -61,9 +61,36 @@ interface AluminiumData {
   createdAt: string;
 }
 
+interface MonthData {
+  label: string;
+  price: number;
+  rateVal: number;
+  ratePct: number;
+  colorClass?: string;
+  textClass?: string;
+  gradient: string;
+  order: number;
+}
+
 interface MCXAluminiumProps {
   expanded?: boolean;
 }
+
+// Define month order mapping for sorting
+const MONTH_ORDER = {
+  'January': 1,
+  'February': 2,
+  'March': 3,
+  'April': 4,
+  'May': 5,
+  'June': 6,
+  'July': 7,
+  'August': 8,
+  'September': 9,
+  'October': 10,
+  'November': 11,
+  'December': 12
+};
 
 const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
   const [showAddOptions, setShowAddOptions] = useState(false);
@@ -143,14 +170,68 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
     };
   }, []);
 
-  // Calculate spread between the first two months
-  let spread = 0;
-  let isContango = false;
-  
-  if (data) {
-    spread = data.month2Price - data.month1Price;
-    isContango = spread > 0;
-  }
+  // Sort month data in chronological order
+  const getSortedMonthData = (): MonthData[] => {
+    if (!data) return [];
+
+    const monthsData: MonthData[] = [
+      {
+        label: data.month1Label,
+        price: data.month1Price,
+        rateVal: data.month1RateVal,
+        ratePct: data.month1RatePct,
+        colorClass: "bg-blue-50 border-blue-100",
+        textClass: "text-blue-800",
+        gradient: "from-blue-600 to-purple-600",
+        order: 0
+      },
+      {
+        label: data.month2Label,
+        price: data.month2Price,
+        rateVal: data.month2RateVal,
+        ratePct: data.month2RatePct,
+        colorClass: "bg-purple-50 border-purple-100",
+        textClass: "text-purple-800",
+        gradient: "from-purple-600 to-pink-600",
+        order: 0
+      },
+      {
+        label: data.month3Label,
+        price: data.month3Price,
+        rateVal: data.month3RateVal,
+        ratePct: data.month3RatePct,
+        colorClass: "bg-pink-50 border-pink-100",
+        textClass: "text-pink-800",
+        gradient: "from-pink-600 to-rose-600",
+        order: 0
+      }
+    ];
+
+    // Get the month order for each month
+    monthsData.forEach(month => {
+      const monthName = month.label.split(" ")[0];
+      month.order = MONTH_ORDER[monthName as keyof typeof MONTH_ORDER] || 0;
+    });
+
+    // Sort by month chronologically
+    return monthsData.sort((a, b) => a.order - b.order);
+  };
+
+  // Calculate spread between current month and next month
+  const getSpreadData = () => {
+    if (!data) return { spread: 0, isContango: false };
+    
+    const sortedMonths = getSortedMonthData();
+    if (sortedMonths.length < 2) return { spread: 0, isContango: false };
+    
+    // Calculate spread as current month minus next month
+    const spread = sortedMonths[0].price - sortedMonths[1].price;
+    const isContango = spread < 0; // Contango is when future prices are higher than current
+    
+    return { spread, isContango };
+  };
+
+  const { spread, isContango } = getSpreadData();
 
   // Helper function to format price change
   const formatChange = (rateVal: number, ratePct: number): string => {
@@ -190,9 +271,9 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             <div className="text-xs text-gray-600 flex items-center gap-1 mb-1 h-4">
               <Calendar
                 className={`w-3 h-3 ${
-                  label === data?.month1Label
+                  gradient.includes("blue")
                     ? "text-blue-600"
-                    : label === data?.month2Label
+                    : gradient.includes("purple")
                     ? "text-purple-600"
                     : "text-pink-600"
                 }`}
@@ -285,6 +366,9 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
     );
   }
 
+  // Get the sorted month data
+  const sortedMonthData = getSortedMonthData();
+
   // Expanded modal content
   const renderExpandedContent = () => (
     <>
@@ -338,35 +422,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        {[
-          {
-            label: data.month1Label,
-            price: data.month1Price,
-            rateVal: data.month1RateVal,
-            ratePct: data.month1RatePct,
-            colorClass: "bg-blue-50 border-blue-100",
-            textClass: "text-blue-800",
-            gradient: "from-blue-600 to-purple-600"
-          },
-          {
-            label: data.month3Label,
-            price: data.month3Price,
-            rateVal: data.month3RateVal,
-            ratePct: data.month3RatePct,
-            colorClass: "bg-pink-50 border-pink-100",
-            textClass: "text-pink-800",
-            gradient: "from-pink-600 to-rose-600"
-          },
-          {
-            label: data.month2Label,
-            price: data.month2Price,
-            rateVal: data.month2RateVal,
-            ratePct: data.month2RatePct,
-            colorClass: "bg-purple-50 border-purple-100",
-            textClass: "text-purple-800",
-            gradient: "from-purple-600 to-pink-600"
-          }
-        ].map((item, index) => (
+        {sortedMonthData.map((item, index) => (
           <div key={index} className={`${item.colorClass} rounded-lg p-3 border`}>
             <div className="flex items-center gap-1 mb-1.5">
               <Calendar className="w-3 h-3" />
@@ -475,56 +531,32 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
       <div className="flex flex-col flex-1 py-1.5">
         {/* Mobile: Vertical layout */}
         <div className="sm:hidden flex flex-col space-y-2.5 mb-2">
-          <ContractPrice
-            label={data.month1Label}
-            price={data.month1Price}
-            rateVal={data.month1RateVal}
-            ratePct={data.month1RatePct}
-            gradient="from-blue-600 to-purple-600"
-            showDivider={false}
-          />
-          <ContractPrice
-            label={data.month3Label}
-            price={data.month3Price}
-            rateVal={data.month3RateVal}
-            ratePct={data.month3RatePct}
-            gradient="from-pink-600 to-rose-600"
-            showDivider={false}
-          />
-          <ContractPrice
-            label={data.month2Label}
-            price={data.month2Price}
-            rateVal={data.month2RateVal}
-            ratePct={data.month2RatePct}
-            gradient="from-purple-600 to-pink-600"
-            showDivider={false}
-          />
+          {sortedMonthData.map((month, index) => (
+            <ContractPrice
+              key={index}
+              label={month.label}
+              price={month.price}
+              rateVal={month.rateVal}
+              ratePct={month.ratePct}
+              gradient={month.gradient}
+              showDivider={false}
+            />
+          ))}
         </div>
 
         {/* Desktop: Horizontal layout */}
         <div className="hidden sm:flex items-center my-2">
-          <ContractPrice
-            label={data.month1Label}
-            price={data.month1Price}
-            rateVal={data.month1RateVal}
-            ratePct={data.month1RatePct}
-            gradient="from-blue-600 to-purple-600"
-          />
-          <ContractPrice
-            label={data.month3Label}
-            price={data.month3Price}
-            rateVal={data.month3RateVal}
-            ratePct={data.month3RatePct}
-            gradient="from-pink-600 to-rose-600"
-          />
-          <ContractPrice
-            label={data.month2Label}
-            price={data.month2Price}
-            rateVal={data.month2RateVal}
-            ratePct={data.month2RatePct}
-            gradient="from-purple-600 to-pink-600"
-            showDivider={false}
-          />
+          {sortedMonthData.map((month, index) => (
+            <ContractPrice
+              key={index}
+              label={month.label}
+              price={month.price}
+              rateVal={month.rateVal}
+              ratePct={month.ratePct}
+              gradient={month.gradient}
+              showDivider={index < sortedMonthData.length - 1}
+            />
+          ))}
         </div>
 
         {/* Add extra space before contango section */}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar } from 'recharts';
 
 type IndexType = 'LME_CSP' | 'LME_3M' | 'MCX_MAR' | 'MCX_APR' | 'MCX_MAY' | 'MCX_ALL';
@@ -13,18 +13,26 @@ interface OhlcData {
   close: number;
 }
 
+interface MetalPriceData {
+  time: string;
+  value: number;
+  change: number;
+  lastUpdated: string;
+  createdAt: string;
+}
+
 interface ChartData {
   time: string;
   lmeCsp: number;
-  lme3m: number;
-  mcxMar: number;
-  mcxApr: number;
-  mcxMay: number;
-  lmeCspOhlc: OhlcData;
-  lme3mOhlc: OhlcData;
-  mcxMarOhlc: OhlcData;
-  mcxAprOhlc: OhlcData;
-  mcxMayOhlc: OhlcData;
+  lme3m?: number;
+  mcxMar?: number;
+  mcxApr?: number;
+  mcxMay?: number;
+  lmeCspOhlc?: OhlcData;
+  lme3mOhlc?: OhlcData;
+  mcxMarOhlc?: OhlcData;
+  mcxAprOhlc?: OhlcData;
+  mcxMayOhlc?: OhlcData;
 }
 
 interface CandleStickProps {
@@ -67,79 +75,6 @@ interface BarShapeProps {
   };
 }
 
-const generateTimeData = (): ChartData[] => {
-  const data: ChartData[] = [];
-  const times = ['14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'];
-
-  const lmeCsp: OhlcData[] = [
-    { open: 2695, high: 2705, low: 2690, close: 2700 },
-    { open: 2700, high: 2710, low: 2698, close: 2705 },
-    { open: 2705, high: 2715, low: 2700, close: 2710 },
-    { open: 2710, high: 2715, low: 2705, close: 2708 },
-    { open: 2708, high: 2715, low: 2705, close: 2712 },
-    { open: 2712, high: 2720, low: 2710, close: 2715 },
-    { open: 2715, high: 2725, low: 2712, close: 2720 }
-  ];
-
-  const lme3m: OhlcData[] = [
-    { open: 2680, high: 2690, low: 2675, close: 2685 },
-    { open: 2685, high: 2695, low: 2680, close: 2690 },
-    { open: 2690, high: 2700, low: 2685, close: 2695 },
-    { open: 2695, high: 2700, low: 2690, close: 2693 },
-    { open: 2693, high: 2700, low: 2690, close: 2698 },
-    { open: 2698, high: 2705, low: 2695, close: 2700 },
-    { open: 2700, high: 2705, low: 2698, close: 2702 }
-  ];
-
-  const mcxMar: OhlcData[] = [
-    { open: 243.50, high: 245.00, low: 243.00, close: 244.50 },
-    { open: 244.50, high: 245.50, low: 244.00, close: 245.00 },
-    { open: 245.00, high: 246.50, low: 244.50, close: 246.00 },
-    { open: 246.00, high: 246.50, low: 245.50, close: 245.75 },
-    { open: 245.75, high: 246.50, low: 245.50, close: 246.30 },
-    { open: 246.30, high: 247.50, low: 246.00, close: 247.00 },
-    { open: 247.00, high: 248.00, low: 246.50, close: 247.50 }
-  ];
-
-  const mcxApr: OhlcData[] = [
-    { open: 244.25, high: 246.00, low: 244.00, close: 245.25 },
-    { open: 245.25, high: 246.00, low: 244.75, close: 245.75 },
-    { open: 245.75, high: 246.50, low: 245.25, close: 246.25 },
-    { open: 246.25, high: 246.50, low: 245.75, close: 246.00 },
-    { open: 246.00, high: 247.00, low: 245.75, close: 246.75 },
-    { open: 246.75, high: 247.50, low: 246.50, close: 247.10 },
-    { open: 247.10, high: 248.00, low: 246.75, close: 247.40 }
-  ];
-
-  const mcxMay: OhlcData[] = [
-    { open: 244.60, high: 246.50, low: 244.25, close: 245.60 },
-    { open: 245.60, high: 246.50, low: 245.00, close: 246.10 },
-    { open: 246.10, high: 247.00, low: 245.75, close: 246.60 },
-    { open: 246.60, high: 247.00, low: 246.00, close: 246.40 },
-    { open: 246.40, high: 247.50, low: 246.00, close: 247.00 },
-    { open: 247.00, high: 248.00, low: 246.75, close: 247.50 },
-    { open: 247.50, high: 248.50, low: 247.00, close: 248.00 }
-  ];
-
-  times.forEach((time, i) => {
-    data.push({
-      time,
-      lmeCsp: lmeCsp[i].close,
-      lme3m: lme3m[i].close,
-      mcxMar: mcxMar[i].close,
-      mcxApr: mcxApr[i].close,
-      mcxMay: mcxMay[i].close,
-      lmeCspOhlc: lmeCsp[i],
-      lme3mOhlc: lme3m[i],
-      mcxMarOhlc: mcxMar[i],
-      mcxAprOhlc: mcxApr[i],
-      mcxMayOhlc: mcxMay[i],
-    });
-  });
-
-  return data;
-};
-
 const CandleStick = (props: CandleStickProps) => {
   const { x, width, payload, dataKey, yAxis } = props;
   
@@ -151,8 +86,8 @@ const CandleStick = (props: CandleStickProps) => {
 
   const { open, high, low, close } = ohlc;
   const isUp = close >= open;
-  const color = isUp ? '#10B981' : '#EF4444';
-  const candleWidth = width * 0.6;
+  const color = isUp ? '#10B981' : '#EF4444'; // Green for up, red for down
+  const candleWidth = width * 0.8; // Wider candles for better visibility
   const candleX = x + (width - candleWidth) / 2;
 
   // Use the yAxis scale to convert values to coordinates
@@ -167,16 +102,16 @@ const CandleStick = (props: CandleStickProps) => {
   // Determine the top and bottom of the candle body
   const bodyTop = isUp ? closeY : openY;
   const bodyBottom = isUp ? openY : closeY;
-  const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+  const bodyHeight = Math.max(2, bodyBottom - bodyTop); // Minimum height of 2px for visibility
 
   return (
     <g>
-      {/* Upper wick */}
+      {/* Wick (high to low) */}
       <line
         x1={x + width / 2}
         y1={highY}
         x2={x + width / 2}
-        y2={bodyTop}
+        y2={lowY}
         stroke={color}
         strokeWidth={1.5}
       />
@@ -187,20 +122,11 @@ const CandleStick = (props: CandleStickProps) => {
         y={bodyTop}
         width={candleWidth}
         height={bodyHeight}
-        fill={color}
-        stroke={color}
-        rx={2}
-        ry={2}
-      />
-
-      {/* Lower wick */}
-      <line
-        x1={x + width / 2}
-        y1={bodyBottom}
-        x2={x + width / 2}
-        y2={lowY}
+        fill={isUp ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)'} // Semi-transparent fill
         stroke={color}
         strokeWidth={1.5}
+        rx={1}
+        ry={1}
       />
     </g>
   );
@@ -209,7 +135,149 @@ const CandleStick = (props: CandleStickProps) => {
 export default function TrendsPage() {
   const [viewType, setViewType] = useState<ViewType>('line');
   const [selectedIndices, setSelectedIndices] = useState<IndexType[]>(['LME_CSP']);
-  const data = generateTimeData();
+  const [metalPrices, setMetalPrices] = useState<MetalPriceData[]>([]);
+  const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<string>('all'); // 'all', 'day', 'week', 'month'
+  const [showChartStats, setShowChartStats] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log("Fetching data...");
+      
+      const response = await fetch('/api/metal-trends');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch metal price data');
+      }
+      
+      const result = await response.json();
+      console.log("API response:", result);
+      
+      if (result.success) {
+        console.log("API Data received:", result.data.length, "records");
+        setMetalPrices(result.data);
+        processChartData(result.data);
+      } else {
+        throw new Error(result.error || 'Failed to fetch metal price data');
+      }
+    } catch (err) {
+      console.error('Error fetching metal price data:', err);
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const seedTestData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch('/api/seed-metal-prices', {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to seed test data');
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log("Seeded data:", result);
+        fetchData(); // Fetch the newly seeded data
+      } else {
+        throw new Error(result.error || 'Failed to seed test data');
+      }
+    } catch (err) {
+      console.error('Error seeding test data:', err);
+      setError((err as Error).message);
+      setLoading(false);
+    }
+  };
+
+  // Process data to create chart data with 30 minute intervals
+  const processChartData = (data: MetalPriceData[]) => {
+    if (!data || data.length === 0) {
+      console.log("No data to process");
+      return;
+    }
+
+    console.log("Processing", data.length, "data points");
+
+    // Group data by 30-minute intervals
+    const groupedData: Record<string, MetalPriceData[]> = {};
+    
+    data.forEach(item => {
+      try {
+        const date = new Date(item.lastUpdated);
+        // Create 30-minute interval key (e.g., "14:00", "14:30")
+        const hour = date.getHours();
+        const minute = date.getMinutes() < 30 ? 0 : 30;
+        const intervalKey = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        
+        if (!groupedData[intervalKey]) {
+          groupedData[intervalKey] = [];
+        }
+        
+        groupedData[intervalKey].push(item);
+      } catch (err) {
+        console.error("Error processing data point:", item, err);
+      }
+    });
+
+    console.log("Grouped data keys:", Object.keys(groupedData));
+
+    // Convert grouped data to chart format
+    const formattedData: ChartData[] = Object.keys(groupedData)
+      .sort()
+      .map(intervalKey => {
+        const prices = groupedData[intervalKey];
+        
+        if (prices.length === 0) return null;
+
+        // For OHLC data, we need to calculate open, high, low, close from the group
+        // Sort by timestamp to ensure correct calculation
+        const sortedPrices = [...prices].sort((a, b) => 
+          new Date(a.lastUpdated).getTime() - new Date(b.lastUpdated).getTime()
+        );
+        
+        // First price in the interval is the open price
+        const open = sortedPrices[0]?.value || 0;
+        
+        // Last price in the interval is the close price
+        const close = sortedPrices[sortedPrices.length - 1]?.value || 0;
+        
+        // Highest price in the interval
+        const high = Math.max(...sortedPrices.map(p => p.value));
+        
+        // Lowest price in the interval
+        const low = Math.min(...sortedPrices.map(p => p.value));
+        
+        return {
+          time: intervalKey,
+          lmeCsp: close,
+          lmeCspOhlc: {
+            open,
+            high,
+            low,
+            close
+          }
+        };
+      })
+      .filter(Boolean) as ChartData[]; // Filter out null values
+    
+    console.log("Formatted chart data:", formattedData);
+    setChartData(formattedData);
+  };
 
   const handleIndexChange = (index: IndexType) => {
     if (index === 'MCX_ALL') {
@@ -262,6 +330,14 @@ export default function TrendsPage() {
             if (viewType === 'candle') {
               const ohlcKey = `${entry.dataKey}Ohlc` as keyof ChartData;
               const ohlc = entry.payload[ohlcKey] as OhlcData;
+              if (!ohlc) return null;
+              
+              // Calculate the price change and color based on whether price went up or down
+              const priceChange = ohlc.close - ohlc.open;
+              const changePercent = ((priceChange / ohlc.open) * 100).toFixed(2);
+              const changeColor = priceChange >= 0 ? '#10B981' : '#EF4444';
+              const changeSymbol = priceChange >= 0 ? '▲' : '▼';
+              
               return (
                 <div key={name} className="flex flex-col gap-1 text-sm">
                   <div className="flex items-center gap-2">
@@ -273,11 +349,18 @@ export default function TrendsPage() {
                        name === 'mcxApr' ? 'MCX Apr' : 'MCX May'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 pl-4">
-                    <div>Open: <span className="font-medium">{prefix}{ohlc.open}</span></div>
-                    <div>High: <span className="font-medium">{prefix}{ohlc.high}</span></div>
-                    <div>Low: <span className="font-medium">{prefix}{ohlc.low}</span></div>
-                    <div>Close: <span className="font-medium">{prefix}{ohlc.close}</span></div>
+                  
+                  {/* OHLC Data with better formatting */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-4 mt-1">
+                    <div>Open: <span className="font-medium">{prefix}{ohlc.open.toFixed(2)}</span></div>
+                    <div>Close: <span className="font-medium">{prefix}{ohlc.close.toFixed(2)}</span></div>
+                    <div>High: <span className="font-medium">{prefix}{ohlc.high.toFixed(2)}</span></div>
+                    <div>Low: <span className="font-medium">{prefix}{ohlc.low.toFixed(2)}</span></div>
+                  </div>
+                  
+                  {/* Price change summary */}
+                  <div className="mt-1 pl-4 font-medium" style={{ color: changeColor }}>
+                    {changeSymbol} {prefix}{Math.abs(priceChange).toFixed(2)} ({changePercent}%)
                   </div>
                 </div>
               );
@@ -293,7 +376,7 @@ export default function TrendsPage() {
                    name === 'mcxApr' ? 'MCX Apr' : 'MCX May'}:
                 </span>
                 <span className="text-gray-600">
-                  {prefix}{entry.value}
+                  {prefix}{entry.value.toFixed(2)}
                 </span>
               </div>
             );
@@ -304,10 +387,134 @@ export default function TrendsPage() {
     return null;
   };
 
+  // Filter data based on selected time range
+  const getFilteredChartData = () => {
+    if (!chartData || chartData.length === 0) return [];
+    
+    if (timeRange === 'all') return chartData;
+    
+    const now = new Date();
+    let filterDate = new Date();
+    
+    switch (timeRange) {
+      case 'day':
+        filterDate.setDate(now.getDate() - 1);
+        break;
+      case 'week':
+        filterDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        filterDate.setMonth(now.getMonth() - 1);
+        break;
+      default:
+        return chartData;
+    }
+    
+    return chartData.filter(item => {
+      const itemDate = new Date(`${new Date().toDateString()} ${item.time}`);
+      return itemDate >= filterDate;
+    });
+  };
+
+  // Calculate chart statistics
+  const getChartStats = () => {
+    if (!chartData || chartData.length === 0) return null;
+    
+    const filteredData = getFilteredChartData();
+    if (filteredData.length === 0) return null;
+    
+    const firstPrice = filteredData[0]?.lmeCsp || 0;
+    const lastPrice = filteredData[filteredData.length - 1]?.lmeCsp || 0;
+    const priceChange = lastPrice - firstPrice;
+    const percentChange = ((priceChange / firstPrice) * 100);
+    
+    const prices = filteredData.map(item => item.lmeCsp);
+    const highPrice = Math.max(...prices);
+    const lowPrice = Math.min(...prices);
+    
+    return {
+      open: firstPrice,
+      close: lastPrice,
+      high: highPrice,
+      low: lowPrice,
+      change: priceChange,
+      changePercent: percentChange
+    };
+  };
+
   const renderChart = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-blue-500">
+            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading...
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-red-500">Error: {error}</div>
+        </div>
+      );
+    }
+
+    if (!chartData || chartData.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="text-gray-500 mb-4">No data available in the database</div>
+          <p className="text-sm text-gray-400 mb-4">You need to add metal price data to the database to see trends</p>
+          <div className="flex gap-2">
+            <button 
+              onClick={fetchData}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+            >
+              Refresh Data
+            </button>
+            <button 
+              onClick={seedTestData}
+              className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+            >
+              Add Test Data
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const filteredData = getFilteredChartData();
+    
+    if (filteredData.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="text-gray-500 mb-2">No data available for selected time range</div>
+          <div className="flex gap-2 mt-4">
+            <button 
+              onClick={() => setTimeRange('all')}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600"
+            >
+              Show All Data
+            </button>
+            <button 
+              onClick={seedTestData}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600"
+            >
+              Add Test Data
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (viewType === 'line') {
       return (
-        <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+        <LineChart data={filteredData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
           <XAxis
             dataKey="time"
@@ -319,18 +526,9 @@ export default function TrendsPage() {
             yAxisId="lme"
             orientation="left"
             domain={['auto', 'auto']}
-            tickFormatter={(value) => `$${value}`}
+            tickFormatter={(value) => `$${value.toFixed(2)}`}
             stroke="#3B82F6"
             tick={{ fill: '#3B82F6', fontSize: 12 }}
-            tickLine={{ stroke: '#E5E7EB' }}
-          />
-          <YAxis
-            yAxisId="mcx"
-            orientation="right"
-            domain={['auto', 'auto']}
-            tickFormatter={(value) => `₹${value}`}
-            stroke="#10B981"
-            tick={{ fill: '#10B981', fontSize: 12 }}
             tickLine={{ stroke: '#E5E7EB' }}
           />
           <Tooltip content={<CustomTooltip />} />
@@ -343,55 +541,7 @@ export default function TrendsPage() {
               name="LME CSP"
               stroke={getLineColor('lmeCsp')}
               strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 6 }}
-            />
-          )}
-          {selectedIndices.includes('LME_3M') && (
-            <Line
-              yAxisId="lme"
-              type="monotone"
-              dataKey="lme3m"
-              name="LME 3M"
-              stroke={getLineColor('lme3m')}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 6 }}
-            />
-          )}
-          {(selectedIndices.includes('MCX_ALL') || selectedIndices.includes('MCX_MAR')) && (
-            <Line
-              yAxisId="mcx"
-              type="monotone"
-              dataKey="mcxMar"
-              name="MCX Mar"
-              stroke={getLineColor('mcxMar')}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 6 }}
-            />
-          )}
-          {(selectedIndices.includes('MCX_ALL') || selectedIndices.includes('MCX_APR')) && (
-            <Line
-              yAxisId="mcx"
-              type="monotone"
-              dataKey="mcxApr"
-              name="MCX Apr"
-              stroke={getLineColor('mcxApr')}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 6 }}
-            />
-          )}
-          {(selectedIndices.includes('MCX_ALL') || selectedIndices.includes('MCX_MAY')) && (
-            <Line
-              yAxisId="mcx"
-              type="monotone"
-              dataKey="mcxMay"
-              name="MCX May"
-              stroke={getLineColor('mcxMay')}
-              strokeWidth={2}
-              dot={false}
+              dot={true}
               activeDot={{ r: 6 }}
             />
           )}
@@ -400,7 +550,7 @@ export default function TrendsPage() {
     } else {
       return (
         <ComposedChart
-          data={data}
+          data={filteredData}
           margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -414,19 +564,11 @@ export default function TrendsPage() {
             yAxisId="lme"
             orientation="left"
             domain={['auto', 'auto']}
-            tickFormatter={(value) => `$${value}`}
+            tickFormatter={(value) => `$${value.toFixed(2)}`}
             stroke="#3B82F6"
             tick={{ fill: '#3B82F6', fontSize: 12 }}
             tickLine={{ stroke: '#E5E7EB' }}
-          />
-          <YAxis
-            yAxisId="mcx"
-            orientation="right"
-            domain={['auto', 'auto']}
-            tickFormatter={(value) => `₹${value}`}
-            stroke="#10B981"
-            tick={{ fill: '#10B981', fontSize: 12 }}
-            tickLine={{ stroke: '#E5E7EB' }}
+            padding={{ top: 20, bottom: 20 }}
           />
           <Tooltip content={<CustomTooltip />} />
 
@@ -435,64 +577,8 @@ export default function TrendsPage() {
               yAxisId="lme"
               dataKey="lmeCspOhlc"
               name="LME CSP"
-              shape={(props: unknown) => {
-                const typedProps = props as BarShapeProps;
-                const scale = typedProps.yAxis.scale;
-                return <CandleStick {...typedProps} yAxis={{ scale }} />;
-              }}
-              fill={getLineColor('lmeCsp')}
-            />
-          )}
-          {selectedIndices.includes('LME_3M') && (
-            <Bar
-              yAxisId="lme"
-              dataKey="lme3mOhlc"
-              name="LME 3M"
-              shape={(props: unknown) => {
-                const typedProps = props as BarShapeProps;
-                const scale = typedProps.yAxis.scale;
-                return <CandleStick {...typedProps} yAxis={{ scale }} />;
-              }}
-              fill={getLineColor('lme3m')}
-            />
-          )}
-          {(selectedIndices.includes('MCX_ALL') || selectedIndices.includes('MCX_MAR')) && (
-            <Bar
-              yAxisId="mcx"
-              dataKey="mcxMarOhlc"
-              name="MCX Mar"
-              shape={(props: unknown) => {
-                const typedProps = props as BarShapeProps;
-                const scale = typedProps.yAxis.scale;
-                return <CandleStick {...typedProps} yAxis={{ scale }} />;
-              }}
-              fill={getLineColor('mcxMar')}
-            />
-          )}
-          {(selectedIndices.includes('MCX_ALL') || selectedIndices.includes('MCX_APR')) && (
-            <Bar
-              yAxisId="mcx"
-              dataKey="mcxAprOhlc"
-              name="MCX Apr"
-              shape={(props: unknown) => {
-                const typedProps = props as BarShapeProps;
-                const scale = typedProps.yAxis.scale;
-                return <CandleStick {...typedProps} yAxis={{ scale }} />;
-              }}
-              fill={getLineColor('mcxApr')}
-            />
-          )}
-          {(selectedIndices.includes('MCX_ALL') || selectedIndices.includes('MCX_MAY')) && (
-            <Bar
-              yAxisId="mcx"
-              dataKey="mcxMayOhlc"
-              name="MCX May"
-              shape={(props: unknown) => {
-                const typedProps = props as BarShapeProps;
-                const scale = typedProps.yAxis.scale;
-                return <CandleStick {...typedProps} yAxis={{ scale }} />;
-              }}
-              fill={getLineColor('mcxMay')}
+              shape={CandleStick}
+              isAnimationActive={false}
             />
           )}
         </ComposedChart>
@@ -500,10 +586,109 @@ export default function TrendsPage() {
     }
   };
 
+  // Get chart stats for displaying summary
+  const stats = getChartStats();
+  const isPositiveChange = stats ? stats.change >= 0 : false;
+
   return (
     <div className="max-w-[1366px] mx-auto px-4 py-6">
+      <h1 className="text-2xl font-bold mb-4">Metal Price Trends</h1>
+
+      {/* Chart statistics summary - shown when data is available */}
+      {showChartStats && !loading && stats && (
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-gray-500">LME CSP</div>
+              <div className="text-2xl font-bold">${stats.close.toFixed(2)}</div>
+              <div className="flex items-center">
+                <span className={`${isPositiveChange ? 'text-green-500' : 'text-red-500'} font-medium flex items-center`}>
+                  {isPositiveChange ? '▲' : '▼'} ${Math.abs(stats.change).toFixed(2)} ({stats.changePercent.toFixed(2)}%)
+                </span>
+                <span className="text-xs text-gray-500 ml-2">
+                  {timeRange === 'all' ? 'All time' : 
+                   timeRange === 'day' ? 'Last 24 hours' : 
+                   timeRange === 'week' ? 'Last week' : 'Last month'}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+              <div>
+                <div className="text-xs text-gray-500">Open</div>
+                <div className="font-medium">${stats.open.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Close</div>
+                <div className="font-medium">${stats.close.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">High</div>
+                <div className="font-medium">${stats.high.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Low</div>
+                <div className="font-medium">${stats.low.toFixed(2)}</div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowChartStats(false)} 
+              className="text-gray-400 hover:text-gray-600"
+              aria-label="Close stats"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Chart controls */}
       <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
         <div className="flex flex-wrap gap-4 items-center">
+          {/* Time range selector */}
+          <div className="flex rounded-lg overflow-hidden border border-gray-200">
+            <button
+              onClick={() => setTimeRange('all')}
+              className={`px-3 py-1.5 text-sm font-medium ${
+                timeRange === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setTimeRange('day')}
+              className={`px-3 py-1.5 text-sm font-medium ${
+                timeRange === 'day'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              24h
+            </button>
+            <button
+              onClick={() => setTimeRange('week')}
+              className={`px-3 py-1.5 text-sm font-medium ${
+                timeRange === 'week'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Week
+            </button>
+            <button
+              onClick={() => setTimeRange('month')}
+              className={`px-3 py-1.5 text-sm font-medium ${
+                timeRange === 'month'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Month
+            </button>
+          </div>
+
+          {/* Chart type selector */}
           <div className="flex rounded-lg overflow-hidden border border-gray-200">
             <button
               onClick={() => setViewType('line')}
@@ -538,55 +723,15 @@ export default function TrendsPage() {
             >
               LME CSP
             </button>
-            <button
-              onClick={() => handleIndexChange('LME_3M')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                selectedIndices.includes('LME_3M')
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+          </div>
+          
+          <div className="ml-auto">
+            <button 
+              onClick={fetchData}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
+              disabled={loading}
             >
-              LME 3-Month
-            </button>
-            <button
-              onClick={() => handleIndexChange('MCX_MAR')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                selectedIndices.includes('MCX_MAR')
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              MCX March
-            </button>
-            <button
-              onClick={() => handleIndexChange('MCX_APR')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                selectedIndices.includes('MCX_APR')
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              MCX April
-            </button>
-            <button
-              onClick={() => handleIndexChange('MCX_MAY')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                selectedIndices.includes('MCX_MAY')
-                  ? 'bg-pink-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              MCX May
-            </button>
-            <button
-              onClick={() => handleIndexChange('MCX_ALL')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                selectedIndices.includes('MCX_ALL')
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              MCX All
+              {loading ? 'Refreshing...' : 'Refresh Data'}
             </button>
           </div>
         </div>
@@ -597,6 +742,22 @@ export default function TrendsPage() {
           {renderChart()}
         </ResponsiveContainer>
       </div>
+      
+      {!loading && chartData.length > 0 && (
+        <div className="mt-4 text-sm text-gray-500 flex justify-between items-center">
+          <div>
+            Showing {getFilteredChartData().length} of {chartData.length} data points with 30-minute intervals
+          </div>
+          {!showChartStats && stats && (
+            <button 
+              onClick={() => setShowChartStats(true)}
+              className="text-blue-500 hover:text-blue-700 text-sm"
+            >
+              Show Price Summary
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

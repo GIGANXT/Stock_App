@@ -41,12 +41,38 @@ interface RatesDisplayProps {
 const safeFormatDate = (date: Date | string | null | undefined, formatStr: string, fallback = 'N/A'): string => {
   try {
     if (!date) return fallback;
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    
+    // If it's a string, attempt to parse it correctly
+    if (typeof date === 'string') {
+      // Try to detect dd-MMM-yyyy format (like "02-May-2025")
+      const ddMmmYyyyMatch = date.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+      if (ddMmmYyyyMatch) {
+        const day = parseInt(ddMmmYyyyMatch[1]);
+        const monthStr = ddMmmYyyyMatch[2];
+        const year = parseInt(ddMmmYyyyMatch[3]);
+        
+        // Convert month name to month number
+        const monthMap: { [key: string]: number } = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        
+        const month = monthMap[monthStr];
+        if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+          date = new Date(year, month, day);
+        } else {
+          date = new Date(date);
+        }
+      } else {
+        date = new Date(date);
+      }
+    }
+    
     // Check if date is valid before formatting
-    if (isNaN(dateObj.getTime())) {
+    if (isNaN((date as Date).getTime())) {
       return fallback;
     }
-    return format(dateObj, formatStr);
+    return format(date, formatStr);
   } catch (err) {
     console.error('Error formatting date:', err);
     return fallback;
@@ -105,7 +131,13 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
   // Fetch RBI rate from Next.js API (now always from database)
   const fetchRbiRate = async () => {
     try {
-      const response = await fetch("/api/rbi"); // Calls your Next.js API to get data from the database
+      // First, attempt to trigger a background refresh
+      const backgroundRefreshPromise = fetch("/api/rbi?backgroundUpdate=true").catch(err => {
+        console.warn("Background refresh request failed:", err);
+      });
+      
+      // Then fetch the latest data from database
+      const response = await fetch("/api/rbi");
       const result = await response.json();
 
       console.log("🔍 Response from RBI API:", result);
@@ -115,15 +147,19 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       }
 
       if (result.data && result.data.length > 0) {
-        const rate = parseFloat(result.data[0].rate);
+        // Always use the first record which should be the latest one
+        const latestRecord = result.data[0];
+        console.log("Latest RBI record:", latestRecord);
+        
+        const rate = parseFloat(latestRecord.rate);
         setRbiRate(rate); // Convert string to number
         
         // Set RBI update date if available in the response
-        if (result.data[0].date && isValidDate(result.data[0].date)) {
-          console.log("Using date from RBI API response:", result.data[0].date);
+        if (latestRecord.date && isValidDate(latestRecord.date)) {
+          console.log("Using date from RBI API response:", latestRecord.date);
           
           // Parse the date string properly (dd-MMM-yyyy format)
-          const dateParts = result.data[0].date.split('-');
+          const dateParts = latestRecord.date.split('-');
           if (dateParts.length === 3) {
             try {
               // Convert month name to month number
@@ -150,8 +186,8 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
               setRbiUpdated(new Date());
             }
           } else {
-            console.log("Setting RBI date directly from string:", result.data[0].date);
-            setRbiUpdated(new Date(result.data[0].date));
+            console.log("Setting RBI date directly from string:", latestRecord.date);
+            setRbiUpdated(new Date(latestRecord.date));
           }
         } else {
           console.log("No valid date in RBI API response, using current date");
@@ -166,6 +202,9 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       } else {
         throw new Error("No RBI rate data available");
       }
+      
+      // Wait for background refresh to complete
+      await backgroundRefreshPromise;
     } catch (error) {
       console.error("Error fetching RBI rate:", error);
       setError("Failed to fetch RBI rate");
@@ -175,7 +214,13 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
   // Fetch SBI TT rate from Next.js API (now always from database)
   const fetchSbiRate = async () => {
     try {
-      const response = await fetch("/api/sbitt"); // Calls your Next.js API to get data from the database
+      // First, attempt to trigger a background refresh
+      const backgroundRefreshPromise = fetch("/api/sbitt?backgroundUpdate=true").catch(err => {
+        console.warn("Background refresh request failed:", err);
+      });
+      
+      // Then fetch the latest data from database
+      const response = await fetch("/api/sbitt");
       
       if (!response.ok) {
         throw new Error("Failed to fetch SBI data");
@@ -210,6 +255,9 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
       } else {
         throw new Error("No SBI rate data available");
       }
+      
+      // Wait for background refresh to complete
+      await backgroundRefreshPromise;
     } catch (error) {
       console.error("🚨 Error fetching SBI rate:", error);
       setError("Failed to fetch SBI rate");
@@ -228,6 +276,14 @@ export default function RatesDisplay({ className = "", expanded = false }: Rates
     };
     
     fetchData(); // Fetch data on mount
+    
+    // Refresh data every 5 minutes
+    const interval = setInterval(() => {
+      console.log("Refreshing rates data...");
+      fetchData();
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = () => {
