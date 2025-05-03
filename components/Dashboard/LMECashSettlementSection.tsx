@@ -164,7 +164,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
       }
       
       // Format to match the UI in the image (25. April 2025 style)
-      return format(date, "d. MMMM yyyy");
+      return format(date, "d MMMM yyyy");
     } catch (e) {
       console.error('Error formatting date:', e);
       return dateString; // Return original string if parsing fails
@@ -240,7 +240,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
           {/* Footer */}
           <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
             <div className="font-bold">
-              {format(new Date(), 'dd. MMMM yyyy')}
+              {format(new Date(), 'dd MMMM yyyy')}
             </div>
           </div>
         </div>
@@ -279,7 +279,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
           {/* Footer */}
           <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
             <div className="font-bold">
-              {format(new Date(), 'dd. MMMM yyyy')}
+              {format(new Date(), 'dd MMMM yyyy')}
             </div>
           </div>
         </div>
@@ -331,15 +331,17 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
         {/* Desktop View - Slider */}
         <div className="relative hidden md:flex items-stretch gap-4">
           {/* Fixed LiveSpotCard (First Card) */}
-          <div className="flex-shrink-0" style={{ width: '23%' }}>
-            <LiveSpotCard 
-              apiUrl="/api/metal-price?returnAverage=true"
-              unit="/MT" 
-            />
+          <div className="flex-shrink-0" style={{ width: '30%' }}>
+            <div className="transform hover:scale-105 transition-transform duration-300 hover:shadow-lg">
+              <LiveSpotCard 
+                apiUrl="/api/metal-price?returnAverage=true"
+                unit="/MT" 
+              />
+            </div>
           </div>
 
           {/* Slider with LME Settlement Cards */}
-          <div className="flex-grow relative" style={{ width: '75%' }}>
+          <div className="flex-grow relative" style={{ width: '68%' }}>
             {/* Edge indicators */}
             <div className={`slider-edge-indicator start ${sliderState.isAtStart ? 'opacity-0' : ''}`} />
             <div className={`slider-edge-indicator end ${sliderState.isAtEnd ? 'opacity-0' : ''}`} />
@@ -441,10 +443,12 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
         <div className="md:hidden">
           <div className="space-y-2.5">
             {/* Today's Card */}
-            <LiveSpotCard 
-              apiUrl="/api/metal-price?returnAverage=true"
-              unit="/MT" 
-            />
+            <div className="bg-white/50 p-2 rounded-xl shadow-sm">
+              <LiveSpotCard 
+                apiUrl="/api/metal-price?returnAverage=true"
+                unit="/MT" 
+              />
+            </div>
 
             {/* Show only first 3 historical cards or all when expanded */}
             <div className="grid grid-cols-1 gap-2.5 scroll-mt-4 scroll-smooth" id="mobile-cards-container">

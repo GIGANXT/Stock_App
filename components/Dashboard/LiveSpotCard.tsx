@@ -36,7 +36,7 @@ export default function LiveSpotCard({
     changePercent = 0.48,
     unit = '/MT',
     apiUrl = '/api/metal-price?forceMetalPrice=true',
-    title = ""
+
 }: LiveSpotCardProps) {
     const [priceData, setPriceData] = useState<ApiResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -190,7 +190,7 @@ export default function LiveSpotCard({
 
     const formatDate = (date: Date) => {
         try {
-            return format(date, 'dd. MMMM yyyy');
+            return format(date, 'dd MMMM yyyy');
         } catch (err) {
             console.error('Error formatting date:', err);
             return 'Unknown date';
@@ -198,27 +198,38 @@ export default function LiveSpotCard({
     };
 
     return (
-        <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+        <div className={`price-card rounded-xl p-3 md:p-4 border 
           shadow-sm hover:shadow-md transition-all duration-200 w-full
-          relative overflow-hidden gpu-render group h-[162px]">
+          relative overflow-hidden gpu-render group h-[162px] 
+          ${isAveragePrice 
+            ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 border-indigo-200 shadow-indigo-100/50' 
+            : 'bg-white border-gray-200'}`}>
             
             {/* Background effect - properly layered */}
             <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
               ${isIncrease ? 'bg-green-500' : 'bg-red-500'} 
               -z-10`}></div>
+            
+            {isAveragePrice && (
+              <>
+                <div className="absolute top-0 right-0 w-32 h-32 -m-12 bg-indigo-200 rounded-full opacity-30"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 -m-10 bg-blue-200 rounded-full opacity-20"></div>
+                <div className="absolute top-1/2 left-1/3 w-16 h-16 -m-8 bg-indigo-300 rounded-full opacity-10 blur-sm"></div>
+              </>
+            )}
 
             <div className="relative flex flex-col h-full gap-1 md:gap-2 justify-between">
                 {/* Header with indicator badge */}
                 <div>
                     {isAveragePrice ? (
-                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1.5 mb-2">
+                        <div className="bg-indigo-600 text-white text-xs px-2.5 py-1.5 rounded-lg font-medium inline-flex items-center gap-1.5 mb-2 shadow-sm">
                             <BarChart3 className="w-3.5 h-3.5 crisp-text" />
                             <span>Estimated Average CSP</span>
                         </div>
                     ) : (
                         <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1.5 mb-2">
                             <Clock className="w-3.5 h-3.5 crisp-text" />
-                            <span>30 mins delay</span>
+                            <span>Spot Price</span>
                         </div>
                     )}
                 </div>
@@ -239,6 +250,26 @@ export default function LiveSpotCard({
                                 Please check if data is available in the database
                             </div>
                         </div>
+                    ) : isAveragePrice ? (
+                        <div className="h-[65px] flex flex-row justify-between items-start">
+                            <div className="flex flex-col">
+                                <span className="font-mono text-2xl md:text-3xl font-bold text-indigo-700 tracking-tight">
+                                    ${formatPrice(currentSpotPrice)}
+                                </span>
+                                <span className="text-xs text-indigo-600 mt-1">
+                                    {unit} • Based on {dataPointsCount} data points
+                                </span>
+                            </div>
+                            <div className={`flex flex-col items-end ${trendColor} bg-white/50 p-2 rounded-lg -mt-4`}>
+                                <TrendIcon className="w-7 h-7 mb-1" />
+                                <span className="font-mono font-bold text-base">
+                                    {isIncrease ? '+' : '-'}${Math.abs(currentChange).toFixed(2)}
+                                </span>
+                                <span className="text-xs">
+                                    {isIncrease ? '+' : '-'}{formatPercent(Math.abs(currentChangePercent))}%
+                                </span>
+                            </div>
+                        </div>
                     ) : (
                         <div className="h-[65px] flex flex-col justify-center">
                             <div className="flex items-baseline gap-2">
@@ -246,41 +277,42 @@ export default function LiveSpotCard({
                                     ${formatPrice(currentSpotPrice)}
                                 </span>
                                 <span className="text-xs text-gray-500">
-                                    {isAveragePrice ? 'Average' : ''}{unit}
+                                    {unit}
                                 </span>
                             </div>
-
-                            <div className={`flex items-center gap-1.5 text-sm ${trendColor} mt-1.5 md:mt-2 font-medium`}>
-                                <TrendIcon className="w-4 h-4 flex-shrink-0 crisp-text" />
-                                <span className="whitespace-nowrap crisp-text">
-                                    {isIncrease ? '+' : ''}{formatPercent(currentChangePercent)}%
+                            <div className="flex items-baseline gap-2 mt-1">
+                                <span className={`font-mono text-sm font-medium ${trendColor}`}>
+                                    {isIncrease ? '+' : '-'}${Math.abs(currentChange).toFixed(2)}
                                 </span>
-                                {isAveragePrice && (
-                                    <span className="text-xs text-gray-500 ml-1">(first to latest)</span>
-                                )}
+                                <span className={`text-xs ${trendColor}`}>
+                                    ({isIncrease ? '+' : '-'}{formatPercent(Math.abs(currentChangePercent))}%)
+                                </span>
                             </div>
-                            
-                            {priceData?.message && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                    {priceData.message}
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Footer with date and datapoints */}
-                <div className="flex items-center justify-between mt-auto pt-2 text-xs text-gray-500">
-                    <div className="font-medium antialiased subpixel-antialiased flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4 crisp-text group-hover:text-indigo-600 transition-colors duration-300" />
-                        <span className="crisp-text group-hover:text-indigo-800 transition-colors duration-300 font-bold">
-                            {formatDate(displayTime)}
-                        </span>
-                    </div>
-                    {isAveragePrice && dataPointsCount > 0 && (
-                        <div className="text-indigo-600 font-medium">
-                            {dataPointsCount} datapoints
-                        </div>
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-0 text-xs text-gray-500">
+                    {isAveragePrice ? (
+                        <>
+                            <div className="font-medium flex items-center text-indigo-800">
+                                <Calendar className="w-3.5 h-3.5 mr-1" />
+                                {formatDate(displayTime)}
+                            </div>
+                            <div className="text-indigo-700 font-medium bg-white/70 px-2 py-0.5 rounded-full">
+                                {priceData?.message || 'Live Data'}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="font-medium">
+                                {formatDate(displayTime)}
+                            </div>
+                            <div>
+                                {priceData?.message || 'Live Data'}
+                            </div>
+                        </>
                     )}
                 </div>
             </div>

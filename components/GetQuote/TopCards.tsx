@@ -336,8 +336,8 @@ const TopCards = () => {
                 left: 50% !important;
                 transform: translateX(-50%) !important;
                 width: auto !important;
-                max-width: 90% !important;
-                min-width: 120px !important;
+                max-width: 97% !important;
+                min-width: 440px !important;
                 padding: 2px 8px !important;
                 z-index: 10 !important;
               }
@@ -349,6 +349,7 @@ const TopCards = () => {
                 justify-content: center !important;
                 width: 100% !important;
                 margin: 0 auto !important;
+                padding: 5px 65px !important;
               }
 
               /* Ensure consistent positioning across screen sizes */
@@ -356,7 +357,7 @@ const TopCards = () => {
                 .mcx-top-card-wrapper .mt-auto {
                   bottom: 0.75rem !important;
                   width: auto !important;
-                  max-width: 200px !important;
+                  max-width: 520px !important;
                 }
               }
               

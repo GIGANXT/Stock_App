@@ -235,7 +235,11 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
           <span className="text-sm text-gray-500">Forward Price</span>
           {!isLoading && timestamp && (
             <div className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded-full">
-              <span>Last Updated: {new Date(timestamp).toLocaleDateString()}</span>
+              <span>Updated at: {new Date(timestamp).toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric' 
+              }).replace(/ /g, '-')}</span>
             </div>
           )}
         </div>
@@ -310,7 +314,11 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
               <div className="text-xs text-gray-500 mt-2 flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" />
-                  <span>Updated: {timestamp ? new Date(timestamp).toLocaleDateString() : 'N/A'}</span>
+                  <span>Updated at: {timestamp ? new Date(timestamp).toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric' 
+                  }).replace(/ /g, '-') : 'N/A'}</span>
                 </div>
                 <span>LME London</span>
               </div>
@@ -404,7 +412,11 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
           <div className="h-4 w-40 bg-gray-200 animate-pulse rounded mt-2"></div>
         ) : timestamp && (
           <div className="text-xs text-gray-500 mt-2 relative z-10">
-            Last updated: {new Date(timestamp).toLocaleDateString()}
+            Updated at: {new Date(timestamp).toLocaleDateString('en-GB', { 
+              day: '2-digit', 
+              month: 'short', 
+              year: 'numeric' 
+            }).replace(/ /g, '-')}
           </div>
         )}
       </div>

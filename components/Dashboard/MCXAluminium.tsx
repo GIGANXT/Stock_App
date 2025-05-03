@@ -224,10 +224,19 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
     const sortedMonths = getSortedMonthData();
     if (sortedMonths.length < 2) return { spread: 0, isContango: false };
     
-    // Calculate spread as current month minus next month (May - June)
+    // Calculate spread as current month minus next month (e.g., May - June)
     const spread = sortedMonths[0].price - sortedMonths[1].price;
-    // For contango, next month should be higher than current month, so current-next will be negative
-    const isContango = spread < 0; // Contango is when May < June (May - June is negative)
+    
+    // For contango:
+    // - Next month should be higher than current month (June > May)
+    // - So spread (May - June) will be negative
+    // - We show a red background with an upward trend arrow
+    // 
+    // For backwardation:
+    // - Current month is higher than next month (May > June)
+    // - So spread (May - June) will be positive
+    // - We show a green background with a downward trend arrow
+    const isContango = spread < 0;
     
     return { spread, isContango };
   };
@@ -450,8 +459,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
           <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
           <span>₹{Math.abs(spread).toFixed(2)}</span>
           {isContango ? 
-            <TrendingUp className="w-3 h-3" /> : 
-            <TrendingDown className="w-3 h-3" />
+            <TrendingDown className="w-3 h-3" /> : 
+            <TrendingUp className="w-3 h-3" />
           }
         </div>
       </div>
@@ -573,8 +582,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
             <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
             <span>₹{Math.abs(spread).toFixed(2)}</span>
             {isContango ? 
-              <TrendingUp className="w-3 h-3" /> : 
-              <TrendingDown className="w-3 h-3" />
+              <TrendingDown className="w-3 h-3" /> : 
+              <TrendingUp className="w-3 h-3" />
             }
           </div>
         </div>

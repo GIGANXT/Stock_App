@@ -14,7 +14,7 @@ export default function LMECashSettlement({
   spread = 40,
   spreadINR = '3350.00',
   isIncrease = true,
-  formattedDate = '30. May 2023'
+  formattedDate = '30 May 2023'
 }: LMECashSettlementProps) {
   const totalPrice = basePrice;
   const trendColor = isIncrease ? "text-green-600" : "text-red-600";
