@@ -3,6 +3,7 @@
 import React from 'react';
 import LiveSpotCard from '../Dashboard/LiveSpotCard';
 import MCXAluminium from '../Dashboard/MCXAluminium';
+import MonthlyCashSettlement from '../Dashboard/MonthlyCashSettlement';
 
 const TopCards = () => {
   return (
@@ -22,11 +23,14 @@ const TopCards = () => {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-4 md:gap-6">
-          <div className="w-full md:col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+          <div className="w-full md:col-span-3">
             <LiveSpotCard />
           </div>
-          <div className="w-full md:col-span-5">
+          <div className="w-full md:col-span-3">
+            <MonthlyCashSettlement />
+          </div>
+          <div className="w-full md:col-span-6">
             {/* Custom styling wrapper for MCXAluminium to control height and width */}
             <div className="mcx-top-card-wrapper">
               <MCXAluminium />
@@ -48,8 +52,8 @@ const TopCards = () => {
               .mcx-top-card-wrapper .bg-white.rounded-lg.p-4.border.border-gray-200.shadow-sm.min-h-\\[190px\\],
               .mcx-top-card-wrapper .bg-white.rounded-xl.p-3.border.border-gray-100.shadow-\\[0_4px_12px_rgba\\(0\\,0\\,0\\,0\\.05\\)\\].hover\\:shadow-lg.transition-all.duration-200.min-h-\\[190px\\].relative {
                 min-height: 162px !important;
-                max-height: 162px !important;
-                height: 162px !important;
+                max-height: none !important;
+                height: auto !important;
                 overflow: hidden !important;
               }
               
@@ -296,7 +300,7 @@ const TopCards = () => {
                 
                 .mcx-top-card-wrapper > div {
                   min-height: 162px !important;
-                  max-height: 162px !important;
+                  max-height: none !important;
                   padding: 0.5rem 1rem !important;
                   overflow: hidden !important;
                 }
@@ -321,7 +325,7 @@ const TopCards = () => {
                 height: 0.375rem !important;
               }
               
-              /* Move contango section to match MCXAluminium */
+              /* Make contango section responsive */
               .mcx-top-card-wrapper {
                 position: relative !important;
               }
@@ -330,8 +334,10 @@ const TopCards = () => {
                 position: absolute !important;
                 bottom: 0.75rem !important;
                 left: 50% !important;
-                transform: translate(-50%, 0) !important;
-                width: 200px !important;  /* Fixed width instead of percentage */
+                transform: translateX(-50%) !important;
+                width: auto !important;
+                max-width: 90% !important;
+                min-width: 120px !important;
                 padding: 2px 8px !important;
                 z-index: 10 !important;
               }
@@ -341,7 +347,7 @@ const TopCards = () => {
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
-                min-width: 120px !important;
+                width: 100% !important;
                 margin: 0 auto !important;
               }
 
@@ -349,7 +355,8 @@ const TopCards = () => {
               @media (min-width: 640px) {
                 .mcx-top-card-wrapper .mt-auto {
                   bottom: 0.75rem !important;
-                  width: 200px !important;
+                  width: auto !important;
+                  max-width: 200px !important;
                 }
               }
               

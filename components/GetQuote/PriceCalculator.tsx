@@ -226,6 +226,12 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
           month3Price: parseFloat(rawData.month3Price)
         };
         
+        console.log('MCX months data received in UI:', 
+          `Month1: ${monthsData.month1Label} (${monthsData.month1Price})`, 
+          `Month2: ${monthsData.month2Label} (${monthsData.month2Price})`, 
+          `Month3: ${monthsData.month3Label} (${monthsData.month3Price})`
+        );
+        
         setMcxMonthsData(monthsData);
         
         // If in live mode but no month is selected, select the first month
@@ -448,21 +454,21 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                     <>
                       <button
                         onClick={() => setMonthPrice(1)}
-                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month1Label ? 'bg-blue-100 border-blue-200 text-blue-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50'}`}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month1Label ? 'bg-green-100 border-green-200 text-green-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-green-50'}`}
                       >
                         <Calendar className="w-3 h-3" />
                         <span>{mcxMonthsData.month1Label.split(' ')[0]}</span>
                       </button>
                       <button
                         onClick={() => setMonthPrice(2)}
-                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month2Label ? 'bg-purple-100 border-purple-200 text-purple-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-purple-50'}`}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month2Label ? 'bg-blue-100 border-blue-200 text-blue-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50'}`}
                       >
                         <Calendar className="w-3 h-3" />
                         <span>{mcxMonthsData.month2Label.split(' ')[0]}</span>
                       </button>
                       <button
                         onClick={() => setMonthPrice(3)}
-                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month3Label ? 'bg-pink-100 border-pink-200 text-pink-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-pink-50'}`}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month3Label ? 'bg-purple-100 border-purple-200 text-purple-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-purple-50'}`}
                       >
                         <Calendar className="w-3 h-3" />
                         <span>{mcxMonthsData.month3Label.split(' ')[0]}</span>

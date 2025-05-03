@@ -164,8 +164,40 @@ async function storeData(data: ApiResponse): Promise<AluminumSnapshotData | null
       const sortedPrices = [...prices].sort((a, b) => {
         const aMonth = a[0]; // e.g. "JUN24" or "June24"
         const bMonth = b[0];
-        return aMonth.localeCompare(bMonth);
+        
+        // Function to convert month names to numeric values for correct sorting
+        const getMonthNumeric = (monthStr: string) => {
+          const monthMap: Record<string, number> = {
+            "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+            "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+            "JANUARY": 1, "FEBRUARY": 2, "MARCH": 3, "APRIL": 4, "MAY_FULL": 5, "JUNE": 6,
+            "JULY": 7, "AUGUST": 8, "SEPTEMBER": 9, "OCTOBER": 10, "NOVEMBER": 11, "DECEMBER": 12
+          };
+          
+          // Extract month part and year part (assuming format like "JUN24" or "June24")
+          const monthPart = monthStr.replace(/[0-9]/g, "").toUpperCase();
+          // Special case for "MAY" since it can be both abbreviated and full form
+          const normalizedMonthPart = monthPart === "MAY" ? "MAY" : monthPart;
+          
+          // Get numeric month value or default to 0 if not found
+          const monthValue = monthMap[normalizedMonthPart] || 0;
+          const yearPart = monthStr.replace(/[^0-9]/g, "");
+          const yearValue = parseInt(yearPart, 10) || 0;
+          
+          // Return a value that can be compared (year * 100 + month)
+          // This ensures that JAN25 comes after DEC24
+          return (yearValue * 100) + monthValue;
+        };
+        
+        const aValue = getMonthNumeric(aMonth);
+        const bValue = getMonthNumeric(bMonth);
+        
+        // Sort in ascending order (earliest month first)
+        return aValue - bValue;
       });
+      
+      // Log the sorted months for debugging
+      console.log('Months after sorting (chronological order):', sortedPrices.map(pair => pair[0]).join(', '));
       
       // Update month 1 if available
       if (sortedPrices[0]) {

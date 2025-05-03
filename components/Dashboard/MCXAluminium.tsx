@@ -8,7 +8,7 @@ import {
   BarChart2,
   LineChart,
 } from "lucide-react";
-import { format, parse } from "date-fns";
+import { format} from "date-fns";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
@@ -224,9 +224,10 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
     const sortedMonths = getSortedMonthData();
     if (sortedMonths.length < 2) return { spread: 0, isContango: false };
     
-    // Calculate spread as current month minus next month
+    // Calculate spread as current month minus next month (May - June)
     const spread = sortedMonths[0].price - sortedMonths[1].price;
-    const isContango = spread < 0; // Contango is when future prices are higher than current
+    // For contango, next month should be higher than current month, so current-next will be negative
+    const isContango = spread < 0; // Contango is when May < June (May - June is negative)
     
     return { spread, isContango };
   };
@@ -442,8 +443,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
 
       <div className={`text-center py-1 px-2 mt-auto rounded ${
         isContango
-          ? "bg-green-100 border border-green-200 text-green-800"
-          : "bg-red-100 border border-red-200 text-red-800"
+          ? "bg-red-100 border border-red-200 text-red-800"
+          : "bg-green-100 border border-green-200 text-green-800"
       }`}>
         <div className="flex items-center justify-center gap-1.5 text-xs">
           <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
@@ -463,7 +464,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
         
         <div className="space-y-3">
           <p className="text-xs text-gray-600">
-            The futures market is currently in <span className={isContango ? "text-green-700" : "text-red-700"}>{isContango ? "contango" : "backwardation"}</span>, 
+            The futures market is currently in <span className={isContango ? "text-red-700" : "text-green-700"}>{isContango ? "contango" : "backwardation"}</span>, 
             with {isContango ? "later contracts trading at higher prices" : "near-term contracts trading at higher prices"}.
           </p>
           
@@ -565,8 +566,8 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
         {/* Contango section */}
         <div className={`text-center py-1 px-2 mt-auto rounded ${
           isContango
-            ? "bg-green-100 border border-green-200 text-green-800"
-            : "bg-red-100 border border-red-200 text-red-800"
+            ? "bg-red-100 border border-red-200 text-red-800"
+            : "bg-green-100 border border-green-200 text-green-800"
         }`}>
           <div className="flex items-center justify-center gap-1.5 text-xs">
             <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>

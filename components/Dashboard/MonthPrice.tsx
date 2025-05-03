@@ -347,7 +347,7 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
               <BarChart2 className="w-4 h-4 text-purple-600" />
             </div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-purple-600">3-Month Futures</h2>
+              <h2 className="text-base font-bold text-purple-600">3-Month </h2>
               <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 font-semibold leading-none">
                 <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
                 <span>LIVE</span>
