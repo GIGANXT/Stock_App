@@ -454,21 +454,33 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                     <>
                       <button
                         onClick={() => setMonthPrice(1)}
-                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month1Label ? 'bg-green-100 border-green-200 text-green-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-green-50'}`}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium transition-all shadow-sm ${
+                          selectedMonth === mcxMonthsData.month1Label 
+                            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white border border-green-300' 
+                            : 'bg-white border border-green-200 text-green-700 hover:bg-green-50'
+                        }`}
                       >
                         <Calendar className="w-3 h-3" />
                         <span>{mcxMonthsData.month1Label.split(' ')[0]}</span>
                       </button>
                       <button
                         onClick={() => setMonthPrice(2)}
-                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month2Label ? 'bg-blue-100 border-blue-200 text-blue-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50'}`}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium transition-all shadow-sm ${
+                          selectedMonth === mcxMonthsData.month2Label 
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border border-blue-300' 
+                            : 'bg-white border border-blue-200 text-blue-700 hover:bg-blue-50'
+                        }`}
                       >
                         <Calendar className="w-3 h-3" />
                         <span>{mcxMonthsData.month2Label.split(' ')[0]}</span>
                       </button>
                       <button
                         onClick={() => setMonthPrice(3)}
-                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium border transition-all ${selectedMonth === mcxMonthsData.month3Label ? 'bg-purple-100 border-purple-200 text-purple-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-purple-50'}`}
+                        className={`flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium transition-all shadow-sm ${
+                          selectedMonth === mcxMonthsData.month3Label 
+                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border border-purple-300' 
+                            : 'bg-white border border-purple-200 text-purple-700 hover:bg-purple-50'
+                        }`}
                       >
                         <Calendar className="w-3 h-3" />
                         <span>{mcxMonthsData.month3Label.split(' ')[0]}</span>
@@ -595,61 +607,79 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
 
         <div className="space-y-6 relative z-10 flex-grow flex flex-col">
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm min-h-[200px] flex flex-col">
-            <div className="mb-1">
+            <div className="flex items-center justify-between mb-2 h-6">
               <label className="text-sm font-medium text-gray-700">
                 LME Aluminum Price (USD/MT)
               </label>
             </div>
             
-            <div className="mb-1">
+            <div className="h-14 mb-3">
               {lmeLoading && !lmePriceData ? (
-                <div className="w-full py-2">
+                <div className="flex flex-col flex-1">
                   {renderPriceInputSkeleton()}
                 </div>
               ) : (
-                <div className="w-full">
-                  <div className="relative flex items-center w-full">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center h-full">
-                      <span className="text-gray-500 text-base font-medium flex items-center h-full">$</span>
-                    </div>
-                    <input
-                      ref={lmePriceFieldRef}
-                      type="number"
-                      value={lmePrice}
-                      onChange={handleLmePriceChange}
-                      placeholder="Enter LME price"
-                      disabled={isLmeLiveMode}
-                      className="w-full pl-10 py-3 h-12 border-2 border-gray-200 active:border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-700 text-base bg-white placeholder:text-gray-400 appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                      <button
-                        onClick={toggleLmeLiveMode}
-                        disabled={lmeLoading}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5 transition-all duration-300 border-2 border-gray-200 active:border-gray-300 shadow-md
-                          ${isLmeLiveMode ? 'bg-gradient-to-r from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700' : 'bg-gradient-to-r from-gray-300 to-gray-500 text-white hover:from-gray-400 hover:to-gray-600'}
-                          ${lmeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {lmeLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : isLmeLiveMode ? (
-                          <>
-                            <Wifi className="w-4 h-4" />
-                            <span className="hidden sm:inline">Live</span>
-                          </>
-                        ) : (
-                          <>
-                            <WifiOff className="w-4 h-4" />
-                            <span className="hidden sm:inline">Manual</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                <div className="relative flex-grow flex items-center">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center h-full">
+                    <span className="text-gray-500 text-base font-medium flex items-center h-full">$</span>
+                  </div>
+                  <input
+                    ref={lmePriceFieldRef}
+                    type="number"
+                    value={lmePrice}
+                    onChange={handleLmePriceChange}
+                    placeholder="Enter LME price"
+                    disabled={isLmeLiveMode}
+                    className="w-full pl-10 py-3 h-12 border-2 border-gray-200 active:border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-700 text-base bg-white placeholder:text-gray-400 appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    <button
+                      onClick={toggleLmeLiveMode}
+                      disabled={lmeLoading}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5 transition-all duration-300 border-2 border-gray-200 active:border-gray-300 shadow-md
+                        ${isLmeLiveMode ? 'bg-gradient-to-r from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700' : 'bg-gradient-to-r from-gray-300 to-gray-500 text-white hover:from-gray-400 hover:to-gray-600'}
+                        ${lmeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {lmeLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : isLmeLiveMode ? (
+                        <>
+                          <Wifi className="w-4 h-4" />
+                          <span className="hidden sm:inline">Live</span>
+                        </>
+                      ) : (
+                        <>
+                          <WifiOff className="w-4 h-4" />
+                          <span className="hidden sm:inline">Manual</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}
             </div>
             
-            <div className="flex-grow min-h-[56px]"></div>
+            <div className="h-10 mb-2">
+              <div className="flex items-center justify-between gap-2 h-full">
+                <button 
+                  className="flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 transition-all shadow-sm"
+                >
+                  <span>Avg CSP MTD</span>
+                </button>
+                
+                <button 
+                  className="flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 transition-all shadow-sm"
+                >
+                  <span>M-1</span>
+                </button>
+                
+                <button 
+                  className="flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-all shadow-sm"
+                >
+                  <span>EST CSP</span>
+                </button>
+              </div>
+            </div>
             
             <div className="h-4 flex items-center text-xs">
               {lmeConnectionError ? (
@@ -667,7 +697,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
           </div>
 
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-100 shadow-sm h-[132px] flex flex-col">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-gray-700">
                 Premium (USD/MT)
               </label>
@@ -681,7 +711,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 </div>
               )}
             </div>
-            <div className="flex gap-2 flex-grow">
+            <div className="flex gap-2 h-14">
               <div className="relative flex-grow flex items-center">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center h-full">
                   <span className="text-gray-500 text-base font-medium flex items-center h-full">$</span>
@@ -710,7 +740,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                   onClick={() => setExchangeRateType('SBI')}
                   className={`px-3 py-1.5 text-sm font-medium transition-colors ${exchangeRateType === 'SBI' ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 >
-                  SBI TT
+                  SBI 
                 </button>
               </div>
             </div>
@@ -720,8 +750,8 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Freight (₹/kg)
             </label>
-            <div className="relative flex-grow">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <div className="relative flex-grow flex items-center">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none h-full">
                 <span className="text-gray-500 text-base font-medium">₹</span>
               </div>
               <input
@@ -746,9 +776,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
             </div>
             
             {!isDataReady && lmeLoading ? (
-              <div className="animate-pulse">
-                <div className="h-14 bg-gradient-to-r from-purple-400/60 to-pink-400/60 rounded-lg w-full"></div>
-              </div>
+              renderTotalPriceSkeleton()
             ) : (
               <div className="relative flex-grow">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
