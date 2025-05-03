@@ -225,7 +225,7 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
     if (sortedMonths.length < 2) return { spread: 0, isContango: false };
     
     // Calculate spread as current month minus next month (e.g., May - June)
-    const spread = sortedMonths[0].price - sortedMonths[1].price;
+    const spread = sortedMonths[1].price - sortedMonths[0].price;
     
     // For contango:
     // - Next month should be higher than current month (June > May)
