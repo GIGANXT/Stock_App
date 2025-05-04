@@ -199,22 +199,25 @@ export default function LiveSpotCard({
 
     return (
         <div className={`price-card rounded-xl p-3 md:p-4 border 
-          shadow-sm hover:shadow-md transition-all duration-200 w-full
+          shadow-sm hover:shadow-sm transition-all duration-150 w-full
           relative overflow-hidden gpu-render group h-[162px] 
           ${isAveragePrice 
             ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 border-indigo-200 shadow-indigo-100/50' 
             : 'bg-white border-gray-200'}`}>
             
-            {/* Background effect - properly layered */}
-            <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
-              ${isIncrease ? 'bg-green-500' : 'bg-red-500'} 
-              -z-10`}></div>
+            {/* Background effect - even more subtle */}
+            {isAveragePrice ? (
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-3 transition-opacity duration-200 bg-indigo-500 -z-10"></div>
+            ) : (
+                <div className={`absolute inset-0 opacity-0 group-hover:opacity-3 transition-opacity duration-200
+                  ${isIncrease ? 'bg-green-500' : 'bg-red-500'} 
+                  -z-10`}></div>
+            )}
             
             {isAveragePrice && (
               <>
-                <div className="absolute top-0 right-0 w-32 h-32 -m-12 bg-indigo-200 rounded-full opacity-30"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 -m-10 bg-blue-200 rounded-full opacity-20"></div>
-                <div className="absolute top-1/2 left-1/3 w-16 h-16 -m-8 bg-indigo-300 rounded-full opacity-10 blur-sm"></div>
+                {/* Minimalist decorative elements */}
+                <div className="absolute top-0 right-0 w-32 h-32 -m-12 bg-indigo-200 rounded-full opacity-15 blur-sm"></div>
               </>
             )}
 
@@ -260,7 +263,7 @@ export default function LiveSpotCard({
                                     {unit} • Based on {dataPointsCount} data points
                                 </span>
                             </div>
-                            <div className={`flex flex-col items-end ${trendColor} bg-white/50 p-2 rounded-lg -mt-4`}>
+                            <div className={`flex flex-col items-end ${trendColor} bg-white/40 p-2 rounded-lg -mt-6 transition-colors duration-200 group-hover:bg-white/50`}>
                                 <TrendIcon className="w-7 h-7 mb-1" />
                                 <span className="font-mono font-bold text-base">
                                     {isIncrease ? '+' : '-'}${Math.abs(currentChange).toFixed(2)}
@@ -300,7 +303,7 @@ export default function LiveSpotCard({
                                 <Calendar className="w-3.5 h-3.5 mr-1" />
                                 {formatDate(displayTime)}
                             </div>
-                            <div className="text-indigo-700 font-medium bg-white/70 px-2 py-0.5 rounded-full">
+                            <div className="text-indigo-700 font-medium bg-white/40 px-2 py-0.5 rounded-md">
                                 {priceData?.message || 'Live Data'}
                             </div>
                         </>
