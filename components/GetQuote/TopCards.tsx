@@ -28,7 +28,9 @@ const TopCards = () => {
             <LiveSpotCard />
           </div>
           <div className="w-full md:col-span-3">
-            <MonthlyCashSettlement />
+            <div className="monthly-cash-wrapper">
+              <MonthlyCashSettlement />
+            </div>
           </div>
           <div className="w-full md:col-span-6">
             {/* Custom styling wrapper for MCXAluminium to control height and width */}
@@ -168,6 +170,18 @@ const TopCards = () => {
                 align-items: center !important;
                 justify-content: center !important;
                 width: 100% !important;
+                font-size: 0.7rem !important;
+                gap: 0.3rem !important;
+                max-width: 100% !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+              }
+              
+              /* Make the icons smaller in contango section */
+              .mcx-top-card-wrapper .text-center.py-1.px-2.mt-auto.rounded svg {
+                width: 0.7rem !important;
+                height: 0.7rem !important;
               }
               
               /* Green contango styling */
@@ -322,24 +336,7 @@ const TopCards = () => {
               /* Restore original contango section layout */
               .mcx-top-card-wrapper .py-1\\.5 {
                 display: block !important;
-                height: 0.375rem !important;
-              }
-              
-              /* Make contango section responsive */
-              .mcx-top-card-wrapper {
-                position: relative !important;
-              }
-              
-              .mcx-top-card-wrapper .mt-auto {
-                position: absolute !important;
-                bottom: 0.75rem !important;
-                left: 50% !important;
-                transform: translateX(-50%) !important;
-                width: auto !important;
-                max-width: 97% !important;
-                min-width: 440px !important;
-                padding: 2px 8px !important;
-                z-index: 10 !important;
+                height: 0.25rem !important; /* Reduced height from 0.375rem */
               }
               
               /* Style the contango section */
@@ -349,15 +346,61 @@ const TopCards = () => {
                 justify-content: center !important;
                 width: 100% !important;
                 margin: 0 auto !important;
-                padding: 5px 65px !important;
+                padding: 1px 0px !important; /* Removed horizontal padding completely */
+                height: 22px !important;
+                min-height: 22px !important;
+                line-height: 1 !important;
+                box-sizing: border-box !important;
+                overflow: hidden !important;
               }
 
+              /* Make contango section responsive */
+              .mcx-top-card-wrapper {
+                position: relative !important;
+                overflow-x: hidden !important; /* Prevent horizontal scrollbar */
+              }
+              
+              .mcx-top-card-wrapper .mt-auto {
+                position: absolute !important;
+                bottom: 0.5rem !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                width: 95% !important; /* Increased width percentage */
+                max-width: 95% !important; /* Increased maximum width */
+                z-index: 10 !important;
+              }
+
+              /* Handle high zoom levels */
+              @media (max-width: 768px), (min-resolution: 1.25dppx) {
+                .mcx-top-card-wrapper .mt-auto {
+                  width: 95% !important;
+                  max-width: 95% !important;
+                  min-width: unset !important;
+                }
+                
+                /* Ensure text doesn't overflow */
+                .mcx-top-card-wrapper .text-center.py-1.px-2.mt-auto.rounded .flex.items-center.justify-center.gap-1\\.5.text-xs {
+                  max-width: 100% !important;
+                  white-space: nowrap !important;
+                  overflow: hidden !important;
+                  text-overflow: ellipsis !important;
+                }
+              }
+              
+              /* Responsive adjustments for small screens */
+              @media (max-width: 480px) {
+                .mcx-top-card-wrapper .mt-auto {
+                  width: 95% !important;
+                  max-width: 95% !important;
+                }
+              }
+              
               /* Ensure consistent positioning across screen sizes */
               @media (min-width: 640px) {
                 .mcx-top-card-wrapper .mt-auto {
                   bottom: 0.75rem !important;
-                  width: auto !important;
-                  max-width: 520px !important;
+                  width: 95% !important;
+                  max-width: 95% !important;
                 }
               }
               
@@ -415,6 +458,44 @@ const TopCards = () => {
               .mcx-top-card-wrapper [class*="bg-gray-200"] {
                 background-color: #f3f4f6 !important;
                 border-radius: 0.25rem !important;
+              }
+              
+              /* Monthly Cash Settlement styling */
+              .monthly-cash-wrapper > div {
+                height: 162px !important;
+                min-height: 162px !important;
+                max-height: 162px !important;
+                overflow: visible !important;
+              }
+              
+              /* Make Monthly Cash Settlement responsive */
+              .monthly-cash-wrapper .text-indigo-800.text-xs {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                max-width: 100% !important;
+              }
+              
+              /* Responsive adjustments for Monthly Cash Settlement */
+              @media (max-width: 768px) {
+                .monthly-cash-wrapper .text-indigo-800.text-xs {
+                  font-size: 0.65rem !important;
+                  line-height: 1 !important;
+                  padding: 0.15rem 0.5rem !important;
+                }
+                
+                .monthly-cash-wrapper .font-mono {
+                  font-size: 1.25rem !important;
+                }
+                
+                .monthly-cash-wrapper .text-xs {
+                  font-size: 0.65rem !important;
+                  line-height: 1.2 !important;
+                }
+                
+                .monthly-cash-wrapper .p-3 {
+                  padding: 0.5rem !important;
+                }
               }
             `}</style>
           </div>

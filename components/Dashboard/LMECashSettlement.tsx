@@ -26,7 +26,7 @@ export default function LMECashSettlement({
   return (
     <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
       shadow-sm hover:shadow-md transition-all duration-200 w-full
-      relative overflow-hidden gpu-render group h-[162px]">
+      relative overflow-hidden gpu-render group h-[162px] touch-manipulation">
       
       {/* Background effect - properly layered */}
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 
@@ -65,11 +65,11 @@ export default function LMECashSettlement({
         {/* Dollar difference display with INR value */}
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-1.5">
-          <TrendIcon className={`w-4 h-4 flex-shrink-0 crisp-text ${trendColor}`} />
-          <span className={`whitespace-nowrap crisp-text ${trendColor} font-medium`}>
-            {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
-          </span>
-        </div>
+            <TrendIcon className={`w-4 h-4 flex-shrink-0 crisp-text ${trendColor}`} />
+            <span className={`whitespace-nowrap crisp-text ${trendColor} font-medium`}>
+              {isIncrease ? '+' : '-'}${Math.abs(spread).toFixed(2)}
+            </span>
+          </div>
 
           <div className={`${trendColor} font-medium text-sm flex items-center gap-1`}>
             <span>{isIncrease ? '+' : '-'}₹{displayINR}</span>

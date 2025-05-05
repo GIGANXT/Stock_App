@@ -219,26 +219,22 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
 
   // Calculate spread between current month and next month
   const getSpreadData = () => {
-    if (!data) return { spread: 0, isContango: false };
+    if (!data) {
+      return { 
+        spread: 0, 
+        isContango: false
+      };
+    }
     
-    const sortedMonths = getSortedMonthData();
-    if (sortedMonths.length < 2) return { spread: 0, isContango: false };
+    // Calculate the spread between next month (month2) and current month (month1)
+    const spread = data.month2Price - data.month1Price;
     
-    // Calculate spread as current month minus next month (e.g., May - June)
-    const spread = sortedMonths[1].price - sortedMonths[0].price;
-    
-    // For contango:
-    // - Next month should be higher than current month (June > May)
-    // - So spread (May - June) will be negative
-    // - We show a red background with an upward trend arrow
-    // 
-    // For backwardation:
-    // - Current month is higher than next month (May > June)
-    // - So spread (May - June) will be positive
-    // - We show a green background with a downward trend arrow
-    const isContango = spread < 0;
-    
-    return { spread, isContango };
+    // If spread is positive, it's contango (month2 price > month1 price)
+    // If spread is negative, it's backwardation (month2 price < month1 price)
+    return { 
+      spread: spread,
+      isContango: spread > 0
+    };
   };
 
   const { spread, isContango } = getSpreadData();
@@ -452,16 +448,13 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
 
       <div className={`text-center py-1 px-2 mt-auto rounded ${
         isContango
-          ? "bg-red-100 border border-red-200 text-red-800"
-          : "bg-green-100 border border-green-200 text-green-800"
+          ? "bg-green-100 border border-green-200 text-green-800"
+          : "bg-red-100 border border-red-200 text-red-800"
       }`}>
         <div className="flex items-center justify-center gap-1.5 text-xs">
           <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
           <span>₹{Math.abs(spread).toFixed(2)}</span>
-          {isContango ? 
-            <TrendingDown className="w-3 h-3" /> : 
-            <TrendingUp className="w-3 h-3" />
-          }
+          {isContango ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
         </div>
       </div>
 
@@ -473,15 +466,16 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
         
         <div className="space-y-3">
           <p className="text-xs text-gray-600">
-            The futures market is currently in <span className={isContango ? "text-red-700" : "text-green-700"}>{isContango ? "contango" : "backwardation"}</span>, 
-            with {isContango ? "later contracts trading at higher prices" : "near-term contracts trading at higher prices"}.
+            The futures market is currently in <span className={isContango ? "text-green-700" : "text-red-700"}>
+              {isContango ? "contango" : "backwardation"}
+            </span>, 
+            with {isContango ? "later contracts trading at higher prices" : "current month trading at higher prices than future months"}.
           </p>
           
           <p className="text-xs text-gray-600">
             {isContango 
               ? "In a contango market, investors are willing to pay a premium for future delivery, indicating expectations of higher prices down the line."
-              : "In a backwardation market, spot prices exceed futures prices, often indicating strong current demand or supply concerns."
-            }
+              : "In a backwardation market, the current demand exceeds future demand, suggesting potential supply constraints or high immediate demand."}
           </p>
           
           <div className="text-xs text-gray-500 mt-2 flex items-center justify-between">
@@ -574,17 +568,14 @@ const MCXAluminium = ({ expanded = false }: MCXAluminiumProps) => {
 
         {/* Contango section */}
         <div className={`text-center py-1 px-2 mt-auto rounded ${
-          isContango
-            ? "bg-red-100 border border-red-200 text-red-800"
-            : "bg-green-100 border border-green-200 text-green-800"
+          isContango 
+            ? "bg-green-100 border border-green-200 text-green-800" 
+            : "bg-red-100 border border-red-200 text-red-800"
         }`}>
           <div className="flex items-center justify-center gap-1.5 text-xs">
             <span>{isContango ? "CONTANGO" : "BACKWARDATION"}</span>
             <span>₹{Math.abs(spread).toFixed(2)}</span>
-            {isContango ? 
-              <TrendingDown className="w-3 h-3" /> : 
-              <TrendingUp className="w-3 h-3" />
-            }
+            {isContango ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
           </div>
         </div>
       </div>

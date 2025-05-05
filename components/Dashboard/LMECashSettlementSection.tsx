@@ -19,6 +19,7 @@ const sliderStyles = {
     touchAction: 'pan-y',
     userSelect: 'none',
     transition: 'all 0.3s ease',
+    WebkitOverflowScrolling: 'touch', // Improve mobile scrolling
   },
   '.lme-slider .slick-track': {
     display: 'flex',
@@ -30,6 +31,7 @@ const sliderStyles = {
     height: 'auto',
     padding: '0 6px',
     transition: 'all 0.3s ease',
+    touchAction: 'manipulation', // Improve touch behavior
   },
   '.lme-slider .slick-slide > div': {
     height: '100%',
@@ -76,6 +78,81 @@ const sliderStyles = {
     '20%, 60%': { transform: 'translateX(-2px)' },
     '40%, 80%': { transform: 'translateX(2px)' },
   },
+  // Fix for drag effects
+  '.slick-slide.dragging': {
+    pointerEvents: 'none',
+  },
+  // Ensure proper width for cards
+  '.lme-card-wrapper': {
+    width: '100%',
+    height: '100%',
+  },
+  // Improve touch behavior
+  '.lme-slider .slick-list': {
+    overflow: 'visible',
+    margin: '0 -10px',
+    padding: '0 10px',
+    touchAction: 'pan-y pinch-zoom', // Enable vertical scrolling
+  },
+  // Prevent text selection during swiping
+  '.lme-slider *': {
+    userSelect: 'none',
+  },
+  // Smooth the dots if they exist
+  '.lme-slider .slick-dots': {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '4px',
+    padding: '8px 0 0',
+  },
+  '.lme-slider .slick-dots li': {
+    margin: '0',
+  },
+  // Prevent iOS hover stuck state
+  '@media (hover: hover)': {
+    '.lme-slider .slick-slide:hover': {
+      cursor: 'grab',
+    },
+  },
+  '.lme-slider .slick-slide:active': {
+    cursor: 'grabbing',
+  },
+  // Swipe indicator styles
+  '.swipe-indicator': {
+    position: 'absolute',
+    bottom: '6px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: '16px',
+    padding: '4px 10px',
+    zIndex: '20',
+    opacity: '0',
+    transition: 'opacity 0.2s ease-in-out',
+    pointerEvents: 'none',
+  },
+  '.swipe-indicator.visible': {
+    opacity: '1',
+  },
+  '.swipe-indicator svg': {
+    width: '16px',
+    height: '16px',
+    color: 'rgb(99, 102, 241)',
+    animation: 'swipeHint 1.5s infinite',
+  },
+  '.swipe-indicator span': {
+    marginLeft: '6px',
+    fontSize: '12px',
+    fontWeight: '500',
+    color: 'rgb(67, 56, 202)',
+  },
+  '@keyframes swipeHint': {
+    '0%, 100%': { transform: 'translateX(0)' },
+    '50%': { transform: 'translateX(4px)' },
+  },
 };
 
 // Define LMECashSettlement data interface
@@ -91,6 +168,7 @@ interface LMECashSettlementData {
 
 export default function LMECashSettlementSection({ title = "LME Cash Settlement" }: LMECashSettlementSectionProps) {
   const sliderRef = useRef<Slider>(null);
+  const sliderContainerRef = useRef<HTMLDivElement>(null);
   const [sliderState, setSliderState] = useState({
     isAtStart: true,
     isAtEnd: false,
@@ -101,6 +179,10 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
   const [error, setError] = useState<string | null>(null);
   // Add state for modal
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Add touch tracking state
+  const [isSwiping, setIsSwiping] = useState(false);
+  // Add state for swipe indicator
+  const [showSwipeIndicator, setShowSwipeIndicator] = useState(false);
 
   // Fetch LME Cash Settlement data from the API
   useEffect(() => {
@@ -198,13 +280,30 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
 
   // Update slider state after each change
   const handleAfterChange = (currentSlide: number) => {
+    if (!sliderRef.current) return;
+    
     const slidesToShow = window.innerWidth >= 768 ? 3 : 1;
+    const totalSlides = lmeData.length || 1;
+    
     setSliderState({
       isAtStart: currentSlide === 0,
-      isAtEnd: currentSlide + slidesToShow >= (lmeData.length || 1),
+      isAtEnd: currentSlide + slidesToShow >= totalSlides,
       currentIndex: currentSlide
     });
   };
+  
+  // Handle window resize to update slider state
+  useEffect(() => {
+    const handleResize = () => {
+      if (sliderRef.current) {
+        const currentSlide = sliderRef.current.innerSlider.state.currentSlide;
+        handleAfterChange(currentSlide);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [lmeData.length]);
 
   // Expanded mobile view state
   const [expandedMobileView, setExpandedMobileView] = useState(false);
@@ -290,7 +389,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
   // Update desktop card rendering structure to match mobile
   const renderCard = (data: LMECashSettlementData, key: string) => {
     return (
-      <div key={key} className="h-full">
+      <div key={key} className="h-full lme-card-wrapper">
         <LMECashSettlement
           basePrice={data.price}
           spread={data.Dollar_Difference}
@@ -300,6 +399,67 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
         />
       </div>
     );
+  };
+
+  // Handle manual slide navigation
+  const goToSlide = (direction: 'prev' | 'next') => {
+    if (!sliderRef.current) return;
+    
+    if (direction === 'prev') {
+      sliderRef.current.slickPrev();
+    } else {
+      sliderRef.current.slickNext();
+    }
+  };
+
+  // Handle before change to prepare visuals
+  const handleBeforeChange = (oldIndex: number, newIndex: number) => {
+    // We could add animations or other visual feedback here if needed
+    // This is called right before the slide changes
+  };
+
+  // Add a function to reset slider when needed (can be called when a user action causes issues)
+  const resetSlider = () => {
+    if (sliderRef.current) {
+      const currentSlide = sliderRef.current.innerSlider.state.currentSlide;
+      sliderRef.current.slickGoTo(currentSlide);
+    }
+  };
+
+  // Function to handle manual touch end (can be used to fix stuck sliders)
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    setIsSwiping(false);
+    
+    // If we need to handle any stuck slider issues on touch end
+    if (sliderRef.current) {
+      // Optional reset if there are persistent issues
+      // setTimeout(() => resetSlider(), 300);
+    }
+  };
+  
+  // Show swipe hint on component mount for a few seconds
+  useEffect(() => {
+    if (lmeData.length > 3 && !isLoading && !error) {
+      setShowSwipeIndicator(true);
+      
+      // Hide after 4 seconds
+      const timer = setTimeout(() => {
+        setShowSwipeIndicator(false);
+      }, 4000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [lmeData.length, isLoading, error]);
+  
+  // Hide swipe indicator when user interacts
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsSwiping(true);
+    setShowSwipeIndicator(false);
+  };
+  
+  // Handle touch move
+  const handleTouchMove = (e: React.TouchEvent) => {
+    // Touch move logic if needed
   };
 
   return (
@@ -341,33 +501,51 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
           </div>
 
           {/* Slider with LME Settlement Cards */}
-          <div className="flex-grow relative" style={{ width: '68%' }}>
+          <div 
+            ref={sliderContainerRef}
+            className="flex-grow relative" 
+            style={{ width: '68%' }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
             {/* Edge indicators */}
             <div className={`slider-edge-indicator start ${sliderState.isAtStart ? 'opacity-0' : ''}`} />
             <div className={`slider-edge-indicator end ${sliderState.isAtEnd ? 'opacity-0' : ''}`} />
+            
+            {/* Swipe Indicator */}
+            <div className={`swipe-indicator ${showSwipeIndicator ? 'visible' : ''}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              <span>Swipe to View More</span>
+            </div>
 
             <Slider
               ref={sliderRef}
               dots={false}
               infinite={false}
-              speed={700}
+              speed={500}
               slidesToShow={3}
               slidesToScroll={1}
               autoplay={false}
-              cssEase="cubic-bezier(0.25, 1, 0.5, 1)"
+              cssEase="ease-out"
               adaptiveHeight={false}
               variableWidth={false}
               swipeToSlide={true}
               draggable={true}
               arrows={false}
               accessibility={true}
-              touchThreshold={5}
+              touchThreshold={10}
               swipe={true}
               touchMove={true}
               useCSS={true}
               useTransform={true}
-              edgeFriction={0.6}
+              edgeFriction={0.15}
               afterChange={handleAfterChange}
+              beforeChange={handleBeforeChange}
+              pauseOnHover={true}
+              pauseOnFocus={true}
               className={`lme-slider ${sliderState.isAtStart ? 'at-start' : ''} ${sliderState.isAtEnd ? 'at-end' : ''}`}
               responsive={[
                 {
@@ -375,7 +553,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
                   settings: {
                     slidesToShow: 2,
                     slidesToScroll: 1,
-                    touchThreshold: 8
+                    touchThreshold: 10
                   }
                 },
                 {
@@ -383,7 +561,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
                   settings: {
                     slidesToShow: 1,
                     slidesToScroll: 1,
-                    touchThreshold: 10
+                    touchThreshold: 15
                   }
                 }
               ]}
@@ -536,11 +714,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
           {/* Desktop Navigation buttons */}
           <div className="hidden md:flex space-x-2">
             <button
-              onClick={() => {
-                if (sliderRef.current) {
-                  sliderRef.current.slickPrev();
-                }
-              }}
+              onClick={() => goToSlide('prev')}
               disabled={sliderState.isAtStart || isLoading || error !== null || lmeData.length === 0}
               className={`w-9 h-9 flex items-center justify-center rounded-md
                 ${sliderState.isAtStart || isLoading || error !== null || lmeData.length === 0
@@ -554,11 +728,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
               </svg>
             </button>
             <button
-              onClick={() => {
-                if (sliderRef.current) {
-                  sliderRef.current.slickNext();
-                }
-              }}
+              onClick={() => goToSlide('next')}
               disabled={sliderState.isAtEnd || isLoading || error !== null || lmeData.length === 0}
               className={`w-9 h-9 flex items-center justify-center rounded-md
                 ${sliderState.isAtEnd || isLoading || error !== null || lmeData.length === 0

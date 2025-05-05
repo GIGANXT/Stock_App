@@ -105,7 +105,7 @@ export default function MonthlyCashSettlement() {
           <div className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full 
             font-medium inline-flex items-center gap-1.5">
             <BarChart3 className="w-3.5 h-3.5 crisp-text" />
-            <span>Monthly Average CSP</span>
+            <span>Monthly Avg CSP</span>
           </div>
           
           <div className="flex items-center gap-1.5">
