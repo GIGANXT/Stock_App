@@ -26,7 +26,7 @@ export default function LMECashSettlement({
   return (
     <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
       shadow-sm hover:shadow-md transition-all duration-200 w-full
-      relative overflow-hidden gpu-render group h-[162px] touch-manipulation">
+      relative overflow-hidden gpu-render group h-[162px] touch-manipulation box-border">
       
       {/* Background effect - properly layered */}
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity 

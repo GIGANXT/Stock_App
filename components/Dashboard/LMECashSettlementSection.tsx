@@ -15,17 +15,33 @@ interface LMECashSettlementSectionProps {
 // CSS for slider styles
 const sliderStyles = {
   '.lme-slider': {
-    margin: '0 -8px',
+    margin: '0',
     touchAction: 'pan-y',
     userSelect: 'none',
     transition: 'all 0.3s ease',
     WebkitOverflowScrolling: 'touch', // Improve mobile scrolling
+    position: 'relative',
+    display: 'block',
+    boxSizing: 'border-box',
+    WebkitTouchCallout: 'none',
+    WebkitUserSelect: 'none',
+    KhtmlUserSelect: 'none',
+    MozUserSelect: 'none',
+    msUserSelect: 'none',
+    width: '100%',
+    overflow: 'hidden'
   },
   '.lme-slider .slick-track': {
     display: 'flex',
     gap: '0',
     alignItems: 'stretch',
     margin: '0',
+    position: 'relative',
+    left: '0',
+    top: '0',
+    padding: '0',
+    boxSizing: 'border-box',
+    transition: 'transform 0.5s ease'
   },
   '.lme-slider .slick-slide': {
     height: 'auto',
@@ -89,10 +105,12 @@ const sliderStyles = {
   },
   // Improve touch behavior
   '.lme-slider .slick-list': {
-    overflow: 'visible',
-    margin: '0 -10px',
-    padding: '0 10px',
+    overflow: 'hidden', // Contains overflow within slider
+    margin: '0',
+    padding: '0',
     touchAction: 'pan-y pinch-zoom', // Enable vertical scrolling
+    width: '100%',
+    position: 'relative'
   },
   // Prevent text selection during swiping
   '.lme-slider *': {
@@ -153,6 +171,48 @@ const sliderStyles = {
     '0%, 100%': { transform: 'translateX(0)' },
     '50%': { transform: 'translateX(4px)' },
   },
+  // Fixed cards layout - new improved styles
+  '.dashboard-cards-layout': {
+    display: 'flex',
+    gap: '16px',
+    position: 'relative',
+    width: '100%',
+    overflow: 'hidden' // Container overflow hidden
+  },
+  '.fixed-card-container': {
+    width: '30%',
+    flexShrink: '0',
+    position: 'relative',
+    zIndex: '10', // Higher z-index
+  },
+  '.scrolling-cards-container': {
+    width: '68%',
+    flexShrink: '0',
+    flexGrow: '0',
+    position: 'relative',
+    overflow: 'hidden', // Critical to contain the slider
+    borderLeft: '1px solid rgba(99, 102, 241, 0.1)',
+    marginLeft: '2%',
+    paddingLeft: '10px',
+    // Add containment context for z-index
+    zIndex: '1',
+    isolation: 'isolate'
+  },
+  // Add styles for the cards themselves to ensure they don't break out
+  '.lme-slider .slick-slide .lme-card-wrapper': {
+    maxWidth: '100%',
+    boxSizing: 'border-box',
+    overflow: 'hidden'
+  },
+  // Add specific class for the slider wrapper
+  '.lme-slider-container': {
+    position: 'relative',
+    overflow: 'hidden',
+    boxSizing: 'border-box',
+    margin: 0,
+    padding: 0,
+    width: '100%'
+  }
 };
 
 // Define LMECashSettlement data interface
@@ -260,18 +320,47 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
 
   // Apply custom slider styles
   useEffect(() => {
+    // Apply fixed styles first
+    const fixedStyleElement = document.createElement('style');
+    fixedStyleElement.textContent = `
+      /* Ensure fixed card stays put */
+      .fixed-card-container {
+        position: relative !important;
+        z-index: 10 !important;
+      }
+      
+      /* Ensure sliding cards don't overflow */
+      .scrolling-cards-container {
+        overflow: hidden !important;
+      }
+      
+      /* Let slider track transform for scrolling */
+      .lme-slider .slick-track {
+        transition: transform 500ms ease !important;
+      }
+      
+      /* Hide overflow on the list but show cards */
+      .lme-slider .slick-list {
+        overflow: hidden !important;
+      }
+    `;
+    document.head.appendChild(fixedStyleElement);
+
     // Apply custom styles
     Object.entries(sliderStyles).forEach(([selector, styles]) => {
-      const styleElement = document.createElement('style');
-      styleElement.textContent = `${selector} { ${Object.entries(styles).map(([prop, value]) => `${prop}: ${value};`).join(' ')} }`;
-      document.head.appendChild(styleElement);
+      const selectorElement = document.createElement('style');
+      selectorElement.textContent = `${selector} { ${Object.entries(styles).map(([prop, value]) => `${prop}: ${value};`).join(' ')} }`;
+      document.head.appendChild(selectorElement);
     });
 
     return () => {
       // Clean up styles when component unmounts
       const styleElements = document.querySelectorAll('style');
       styleElements.forEach(el => {
-        if (el.textContent && Object.keys(sliderStyles).some(selector => el.textContent?.includes(selector))) {
+        if (
+          (el.textContent && Object.keys(sliderStyles).some(selector => el.textContent?.includes(selector))) ||
+          (el.textContent && el.textContent.includes('.fixed-card-container'))
+        ) {
           el.remove();
         }
       });
@@ -296,8 +385,13 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
   useEffect(() => {
     const handleResize = () => {
       if (sliderRef.current) {
-        const currentSlide = sliderRef.current.innerSlider.state.currentSlide;
-        handleAfterChange(currentSlide);
+        try {
+          // @ts-ignore - innerSlider is not in the type definitions but exists at runtime
+          const currentSlide = sliderRef.current.innerSlider?.state?.currentSlide || 0;
+          handleAfterChange(currentSlide);
+        } catch (e) {
+          console.error("Error accessing slider state:", e);
+        }
       }
     };
 
@@ -421,8 +515,13 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
   // Add a function to reset slider when needed (can be called when a user action causes issues)
   const resetSlider = () => {
     if (sliderRef.current) {
-      const currentSlide = sliderRef.current.innerSlider.state.currentSlide;
-      sliderRef.current.slickGoTo(currentSlide);
+      try {
+        // @ts-ignore - innerSlider is not in the type definitions but exists at runtime
+        const currentSlide = sliderRef.current.innerSlider?.state?.currentSlide || 0;
+        sliderRef.current.slickGoTo(currentSlide);
+      } catch (e) {
+        console.error("Error resetting slider:", e);
+      }
     }
   };
 
@@ -489,9 +588,9 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
         </div>
 
         {/* Desktop View - Slider */}
-        <div className="relative hidden md:flex items-stretch gap-4">
+        <div className="relative hidden md:flex dashboard-cards-layout">
           {/* Fixed LiveSpotCard (First Card) */}
-          <div className="flex-shrink-0" style={{ width: '30%' }}>
+          <div className="fixed-card-container">
             <div className="transform hover:scale-105 transition-transform duration-300 hover:shadow-lg">
               <LiveSpotCard 
                 apiUrl="/api/metal-price?returnAverage=true"
@@ -503,8 +602,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
           {/* Slider with LME Settlement Cards */}
           <div 
             ref={sliderContainerRef}
-            className="flex-grow relative" 
-            style={{ width: '68%' }}
+            className="scrolling-cards-container" 
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -536,17 +634,18 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
               draggable={true}
               arrows={false}
               accessibility={true}
-              touchThreshold={10}
+              touchThreshold={15}
               swipe={true}
               touchMove={true}
               useCSS={true}
               useTransform={true}
-              edgeFriction={0.15}
+              edgeFriction={0.35}
+              lazyLoad="ondemand"
               afterChange={handleAfterChange}
               beforeChange={handleBeforeChange}
               pauseOnHover={true}
               pauseOnFocus={true}
-              className={`lme-slider ${sliderState.isAtStart ? 'at-start' : ''} ${sliderState.isAtEnd ? 'at-end' : ''}`}
+              className={`lme-slider lme-slider-container ${sliderState.isAtStart ? 'at-start' : ''} ${sliderState.isAtEnd ? 'at-end' : ''}`}
               responsive={[
                 {
                   breakpoint: 1024,
@@ -608,7 +707,7 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
               ) : (
                 // Real data cards - use the shared rendering function
                 lmeData.map((data, index) => (
-                  <div key={`settlement-card-${index}`} className="h-full py-0.5 px-2">
+                  <div key={`settlement-card-${index}`} className="h-full py-0.5 px-2 box-border">
                     {renderCard(data, `desktop-card-${index}`)}
                   </div>
                 ))
