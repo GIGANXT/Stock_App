@@ -10,6 +10,29 @@ interface PriceCalculatorProps {
   className?: string;
 }
 
+// Interface for the monthly cash settlement response
+interface MonthlyCashSettlementResponse {
+  type: 'averagePrice' | 'noData' | 'error';
+  averagePrice?: number;
+  monthName?: string;
+  dataPointsCount?: number;
+  month?: number;
+  year?: number;
+  message?: string;
+}
+
+// Interface for the metal price API response
+interface MetalPriceResponse {
+  type: 'spotPrice' | 'averagePrice' | 'noData' | 'cashSettlement';
+  spotPrice?: number;
+  averagePrice?: number;
+  change?: number;
+  changePercent?: number;
+  lastUpdated?: string;
+  dataPointsCount?: number;
+  message?: string;
+}
+
 type ExchangeRateType = 'RBI' | 'SBI';
 
 export default function PriceCalculator({ className }: PriceCalculatorProps) {
@@ -31,6 +54,9 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   const [isMcxPriceUpdating, setIsMcxPriceUpdating] = useState(false);
   const [isLmePriceUpdating, setIsLmePriceUpdating] = useState(false);
   const [exchangeRateType, setExchangeRateType] = useState<ExchangeRateType>('RBI');
+  const [isLoadingMonthlyCashSettlement, setIsLoadingMonthlyCashSettlement] = useState(false);
+  const [monthlyCashSettlementData, setMonthlyCashSettlementData] = useState<MonthlyCashSettlementResponse | null>(null);
+  const [liveDataIntervalId, setLiveDataIntervalId] = useState<NodeJS.Timeout | null>(null);
   
   const freightInputRef = useRef<HTMLInputElement>(null);
   const mcxPriceFieldRef = useRef<HTMLInputElement>(null);
@@ -55,6 +81,93 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   } | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [loadingMonths, setLoadingMonths] = useState(false);
+
+  // Add a new function to fetch live spot price data
+  const fetchLiveSpotPrice = async () => {
+    try {
+      setIsLmePriceUpdating(true);
+      
+      // Use the same API endpoint as LiveSpotCard component
+      const response = await fetch('/api/metal-price?forceMetalPrice=true', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch live spot price: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.type === 'noData') {
+        throw new Error(data.message || 'No price data available');
+      }
+      
+      // Use spotPrice from the response
+      if (data.spotPrice !== undefined) {
+        setLmePrice(data.spotPrice.toFixed(2));
+        setLmeLastUpdate(new Date(data.lastUpdated || new Date()));
+        
+        // Clear any monthly data display indicators
+        setMonthlyCashSettlementData(null);
+        
+        // Provide visual feedback
+        if (lmePriceFieldRef.current) {
+          lmePriceFieldRef.current.classList.add('bg-green-50');
+          setTimeout(() => {
+            lmePriceFieldRef.current?.classList.remove('bg-green-50');
+          }, 1000);
+        }
+      } else {
+        throw new Error('Live spot price data is missing');
+      }
+    } catch (error) {
+      console.error('Error fetching live spot price:', error);
+      setLmeConnectionError(error instanceof Error ? error.message : 'Failed to fetch live spot price data');
+      // If error occurs, switch back to manual mode
+      setIsLmeLiveMode(false);
+    } finally {
+      setIsLmePriceUpdating(false);
+    }
+  };
+
+  // Update toggleLmeLiveMode to use fetchLiveSpotPrice
+  const toggleLmeLiveMode = () => {
+    if (!isLmeLiveMode && lmeLoading) return;
+    
+    const newLiveMode = !isLmeLiveMode;
+    setIsLmeLiveMode(newLiveMode);
+    
+    if (newLiveMode) {
+      // When live mode is activated, fetch the latest spot price data
+      fetchLiveSpotPrice();
+      
+      // Set up regular polling for live data
+      const intervalId = setInterval(fetchLiveSpotPrice, 60000); // Refresh every minute
+      setLiveDataIntervalId(intervalId);
+    } else {
+      // Switching to manual mode
+      setLmePrice(''); // Clear price when switching to manual
+      setMonthlyCashSettlementData(null); // Also clear monthly data indicators
+      
+      // Clear the polling interval
+      if (liveDataIntervalId) {
+        clearInterval(liveDataIntervalId);
+        setLiveDataIntervalId(null);
+      }
+    }
+  };
+
+  // Clean up polling interval when component unmounts
+  useEffect(() => {
+    return () => {
+      if (liveDataIntervalId) {
+        clearInterval(liveDataIntervalId);
+      }
+    };
+  }, [liveDataIntervalId]);
 
   useEffect(() => {
     let updateTimeout: NodeJS.Timeout;
@@ -84,26 +197,6 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   }, [isMcxLiveMode, mcxPriceData, selectedMonth, mcxMonthsData]);
 
   useEffect(() => {
-    let updateTimeout: NodeJS.Timeout;
-
-    if (isLmeLiveMode && lmePriceData && lmePriceData.currentPrice) {
-      setLmePrice(lmePriceData.currentPrice.toFixed(2));
-      setLmeLastUpdate(new Date(lmePriceData.lastUpdated));
-      setIsLmePriceUpdating(true);
-
-      if (lmePriceFieldRef.current) {
-        lmePriceFieldRef.current.classList.add('bg-green-50');
-        updateTimeout = setTimeout(() => {
-          lmePriceFieldRef.current?.classList.remove('bg-green-50');
-          setIsLmePriceUpdating(false);
-        }, 1000);
-      }
-    }
-
-    return () => clearTimeout(updateTimeout);
-  }, [isLmeLiveMode, lmePriceData]);
-
-  useEffect(() => {
     if (mcxError) {
       setMcxConnectionError('Failed to fetch live MCX price data');
       setIsMcxLiveMode(false);
@@ -126,6 +219,183 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
       console.error('Failed to fetch exchange rates:', ratesError);
     }
   }, [ratesError]);
+
+  // New function to fetch estimated average CSP from LiveSpotCard's API
+  const fetchEstimatedCsp = async () => {
+    try {
+      setIsLoadingMonthlyCashSettlement(true);
+      
+      // Create cacheBuster to prevent caching
+      const cacheBuster = new Date().getTime();
+      
+      // Use the same API endpoint as LiveSpotCard - with returnAverage parameter
+      const response = await fetch(
+        `/api/metal-price?returnAverage=true&_t=${cacheBuster}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch estimated CSP data: ${response.status}`);
+      } else {
+        const data = await response.json();
+        
+        // Update LME price if data is available
+        if (data.type === 'averagePrice' && data.spotPrice !== undefined) {
+          setLmePrice(data.spotPrice.toFixed(2));
+          setIsLmeLiveMode(false);
+          
+          // Set a custom response for display in the UI
+          setMonthlyCashSettlementData({
+            type: 'averagePrice',
+            averagePrice: data.spotPrice,
+            dataPointsCount: data.dataPointsCount,
+            monthName: 'Estimated Average CSP',
+            message: data.message || 'Using estimated average price'
+          });
+          
+          // Provide visual feedback
+          if (lmePriceFieldRef.current) {
+            lmePriceFieldRef.current.classList.add('bg-green-50');
+            setTimeout(() => {
+              lmePriceFieldRef.current?.classList.remove('bg-green-50');
+            }, 1000);
+          }
+        } else {
+          throw new Error('No average price data available');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching estimated CSP data:', error);
+      setLmeConnectionError(error instanceof Error ? error.message : 'Failed to fetch estimated CSP data');
+    } finally {
+      setIsLoadingMonthlyCashSettlement(false);
+    }
+  };
+
+  // Update EST CSP button click handler to use the new function
+  const handleEstCspClick = () => {
+    fetchEstimatedCsp();
+  };
+
+  // New function to fetch current month's cash settlement data (MTD)
+  const fetchCurrentMonthCashSettlement = async () => {
+    try {
+      setIsLoadingMonthlyCashSettlement(true);
+      
+      // Create cacheBuster to prevent caching
+      const cacheBuster = new Date().getTime();
+      
+      // Use the current month and year
+      const currentDate = new Date();
+      const month = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+      const year = currentDate.getFullYear();
+      
+      // Fetch data from the API
+      const response = await fetch(
+        `/api/monthly-cash-settlement?month=${month}&year=${year}&_t=${cacheBuster}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch current month's cash settlement: ${response.status}`);
+      } else {
+        const data = await response.json();
+        setMonthlyCashSettlementData(data);
+        
+        // Update LME price if data is available
+        if (data.type === 'averagePrice' && data.averagePrice !== undefined) {
+          setLmePrice(data.averagePrice.toFixed(2));
+          setIsLmeLiveMode(false);
+          
+          // Provide visual feedback
+          if (lmePriceFieldRef.current) {
+            lmePriceFieldRef.current.classList.add('bg-green-50');
+            setTimeout(() => {
+              lmePriceFieldRef.current?.classList.remove('bg-green-50');
+            }, 1000);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching current month cash settlement:', error);
+      setLmeConnectionError(error instanceof Error ? error.message : 'Failed to fetch current month cash settlement data');
+    } finally {
+      setIsLoadingMonthlyCashSettlement(false);
+    }
+  };
+
+  // Handle Avg CSP MTD button click
+  const handleAvgCspMtdClick = () => {
+    fetchCurrentMonthCashSettlement();
+  };
+
+  // New function to fetch previous month's cash settlement data
+  const fetchPreviousMonthCashSettlement = async () => {
+    try {
+      setIsLoadingMonthlyCashSettlement(true);
+      
+      // Create cacheBuster to prevent caching
+      const cacheBuster = new Date().getTime();
+      
+      // Use the previous month and year
+      const currentDate = new Date();
+      currentDate.setMonth(currentDate.getMonth() - 1);
+      const month = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+      const year = currentDate.getFullYear();
+      
+      // Fetch data from the API
+      const response = await fetch(
+        `/api/monthly-cash-settlement?month=${month}&year=${year}&_t=${cacheBuster}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch previous month's cash settlement: ${response.status}`);
+      } else {
+        const data = await response.json();
+        setMonthlyCashSettlementData(data);
+        
+        // Update LME price if data is available
+        if (data.type === 'averagePrice' && data.averagePrice !== undefined) {
+          setLmePrice(data.averagePrice.toFixed(2));
+          setIsLmeLiveMode(false);
+          
+          // Provide visual feedback
+          if (lmePriceFieldRef.current) {
+            lmePriceFieldRef.current.classList.add('bg-green-50');
+            setTimeout(() => {
+              lmePriceFieldRef.current?.classList.remove('bg-green-50');
+            }, 1000);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching previous month cash settlement:', error);
+      setLmeConnectionError(error instanceof Error ? error.message : 'Failed to fetch previous month cash settlement data');
+    } finally {
+      setIsLoadingMonthlyCashSettlement(false);
+    }
+  };
+
+  // Handle M-1 button click
+  const handleM1Click = () => {
+    fetchPreviousMonthCashSettlement();
+  };
 
   const handlePremiumKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && freightInputRef.current) {
@@ -154,19 +424,6 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
     } else {
       // Switching to manual mode
       setMcxPrice(''); // Clear price when switching to manual
-    }
-  };
-
-  const toggleLmeLiveMode = () => {
-    if (!isLmeLiveMode && lmeLoading) return;
-    
-    const newLiveMode = !isLmeLiveMode;
-    setIsLmeLiveMode(newLiveMode);
-    
-    if (newLiveMode) {
-      setLmeLastUpdate(new Date());
-    } else {
-      setLmePrice(''); // Clear price when switching to manual
     }
   };
 
@@ -662,21 +919,39 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
             <div className="h-10 mb-2">
               <div className="flex items-center justify-between gap-2 h-full">
                 <button 
+                  onClick={handleAvgCspMtdClick}
+                  disabled={isLoadingMonthlyCashSettlement}
                   className="flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 transition-all shadow-sm"
                 >
-                  <span>Avg CSP MTD</span>
+                  {isLoadingMonthlyCashSettlement && !monthlyCashSettlementData ? (
+                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                  ) : (
+                    <span>Avg CSP MTD</span>
+                  )}
                 </button>
                 
                 <button 
+                  onClick={handleM1Click}
+                  disabled={isLoadingMonthlyCashSettlement}
                   className="flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium bg-white border border-pink-200 text-pink-700 hover:bg-pink-50 transition-all shadow-sm"
                 >
-                  <span>M-1</span>
+                  {isLoadingMonthlyCashSettlement && monthlyCashSettlementData?.month !== new Date().getMonth() ? (
+                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                  ) : (
+                    <span>M-1</span>
+                  )}
                 </button>
                 
                 <button 
+                  onClick={handleEstCspClick}
+                  disabled={isLoadingMonthlyCashSettlement}
                   className="flex-1 py-2 px-2 flex items-center justify-center gap-1 rounded-lg text-xs font-medium bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-all shadow-sm"
                 >
-                  <span>EST CSP</span>
+                  {isLoadingMonthlyCashSettlement ? (
+                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                  ) : (
+                    <span>EST CSP</span>
+                  )}
                 </button>
               </div>
             </div>
@@ -691,6 +966,11 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                 <p className="text-purple-500 flex items-center gap-1">
                   <span className="inline-block w-1 h-1 rounded-full bg-purple-500"></span>
                   Last updated: {lmeLastUpdate.toLocaleTimeString()}
+                </p>
+              ) : monthlyCashSettlementData?.type === 'averagePrice' && monthlyCashSettlementData?.monthName ? (
+                <p className="text-indigo-500 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-indigo-500"></span>
+                  {monthlyCashSettlementData.monthName} avg ({monthlyCashSettlementData.dataPointsCount} data points)
                 </p>
               ) : null}
             </div>
