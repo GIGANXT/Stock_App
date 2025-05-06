@@ -363,7 +363,7 @@ async function startDataFetching() {
   console.log('Starting continuous data fetching...');
 
   try {
-    eventSource = new EventSourcePolyfill('http://148.135.138.22:5002/stream', {
+    eventSource = new EventSourcePolyfill('http://148.135.138.22:5006/stream', {
       headers: {
         'Accept': 'text/event-stream'
       }
