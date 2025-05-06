@@ -587,140 +587,142 @@ export default function LMECashSettlementSection({ title = "LME Cash Settlement"
           </button>
         </div>
 
-        {/* Desktop View - Slider */}
-        <div className="relative hidden md:flex dashboard-cards-layout">
-          {/* Fixed LiveSpotCard (First Card) */}
-          <div className="fixed-card-container">
-            <div className="transform hover:scale-105 transition-transform duration-300 hover:shadow-lg">
-              <LiveSpotCard 
-                apiUrl="/api/metal-price?returnAverage=true"
-                unit="/MT" 
-              />
-            </div>
-          </div>
-
-          {/* Slider with LME Settlement Cards */}
-          <div 
-            ref={sliderContainerRef}
-            className="scrolling-cards-container" 
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
-            {/* Edge indicators */}
-            <div className={`slider-edge-indicator start ${sliderState.isAtStart ? 'opacity-0' : ''}`} />
-            <div className={`slider-edge-indicator end ${sliderState.isAtEnd ? 'opacity-0' : ''}`} />
-            
-            {/* Swipe Indicator */}
-            <div className={`swipe-indicator ${showSwipeIndicator ? 'visible' : ''}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-              <span>Swipe to View More</span>
+        {/* Desktop View - Slider - Only rendered on md screens and above */}
+        <div className="hidden md:block">
+          <div className="relative flex dashboard-cards-layout">
+            {/* Fixed LiveSpotCard (First Card) */}
+            <div className="fixed-card-container">
+              <div className="transform hover:scale-105 transition-transform duration-300 hover:shadow-lg">
+                <LiveSpotCard 
+                  apiUrl="/api/metal-price?returnAverage=true"
+                  unit="/MT" 
+                />
+              </div>
             </div>
 
-            <Slider
-              ref={sliderRef}
-              dots={false}
-              infinite={false}
-              speed={500}
-              slidesToShow={3}
-              slidesToScroll={1}
-              autoplay={false}
-              cssEase="ease-out"
-              adaptiveHeight={false}
-              variableWidth={false}
-              swipeToSlide={true}
-              draggable={true}
-              arrows={false}
-              accessibility={true}
-              touchThreshold={15}
-              swipe={true}
-              touchMove={true}
-              useCSS={true}
-              useTransform={true}
-              edgeFriction={0.35}
-              lazyLoad="ondemand"
-              afterChange={handleAfterChange}
-              beforeChange={handleBeforeChange}
-              pauseOnHover={true}
-              pauseOnFocus={true}
-              className={`lme-slider lme-slider-container ${sliderState.isAtStart ? 'at-start' : ''} ${sliderState.isAtEnd ? 'at-end' : ''}`}
-              responsive={[
-                {
-                  breakpoint: 1024,
-                  settings: {
-                    slidesToShow: 2,
-                    slidesToScroll: 1,
-                    touchThreshold: 10
-                  }
-                },
-                {
-                  breakpoint: 768,
-                  settings: {
-                    slidesToShow: 1,
-                    slidesToScroll: 1,
-                    touchThreshold: 15
-                  }
-                }
-              ]}
+            {/* Slider with LME Settlement Cards */}
+            <div 
+              ref={sliderContainerRef}
+              className="scrolling-cards-container" 
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             >
-              {isLoading ? (
-                // Loading skeletons for desktop view
-                Array.from({ length: 3 }).map((_, index) => (
-                  <div key={`skeleton-${index}`} className="h-full py-0.5 px-2">
-                    <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
-                        shadow-sm hover:shadow-md transition-all duration-200 w-full
-                        relative overflow-hidden gpu-render h-[162px]">
-                      <div className="flex flex-col h-full gap-1 md:gap-2 justify-between">
-                        {/* Header with indicator badge */}
-                        <div>
-                          <div className="h-5 w-32 bg-gray-200 animate-pulse rounded-full mb-2"></div>
-                        </div>
-                        
-                        {/* Price Content */}
-                        <div className="flex-1 py-1 md:py-2">
-                          <div className="h-6 w-28 md:w-32 bg-gray-200 animate-pulse mb-3 rounded"></div>
-                          <div className="h-4 w-24 bg-gray-200 animate-pulse mb-2 rounded"></div>
-                          <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
-                        </div>
-                        
-                        {/* Footer */}
-                        <div className="flex items-center justify-between pt-2">
-                          <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
-                          <div className="h-3 w-16 bg-gray-200 animate-pulse rounded"></div>
+              {/* Edge indicators */}
+              <div className={`slider-edge-indicator start ${sliderState.isAtStart ? 'opacity-0' : ''}`} />
+              <div className={`slider-edge-indicator end ${sliderState.isAtEnd ? 'opacity-0' : ''}`} />
+              
+              {/* Swipe Indicator */}
+              <div className={`swipe-indicator ${showSwipeIndicator ? 'visible' : ''}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span>Swipe to View More</span>
+              </div>
+
+              <Slider
+                ref={sliderRef}
+                dots={false}
+                infinite={false}
+                speed={500}
+                slidesToShow={3}
+                slidesToScroll={1}
+                autoplay={false}
+                cssEase="ease-out"
+                adaptiveHeight={false}
+                variableWidth={false}
+                swipeToSlide={true}
+                draggable={true}
+                arrows={false}
+                accessibility={true}
+                touchThreshold={15}
+                swipe={true}
+                touchMove={true}
+                useCSS={true}
+                useTransform={true}
+                edgeFriction={0.35}
+                lazyLoad="ondemand"
+                afterChange={handleAfterChange}
+                beforeChange={handleBeforeChange}
+                pauseOnHover={true}
+                pauseOnFocus={true}
+                className={`lme-slider lme-slider-container ${sliderState.isAtStart ? 'at-start' : ''} ${sliderState.isAtEnd ? 'at-end' : ''}`}
+                responsive={[
+                  {
+                    breakpoint: 1024,
+                    settings: {
+                      slidesToShow: 2,
+                      slidesToScroll: 1,
+                      touchThreshold: 10
+                    }
+                  },
+                  {
+                    breakpoint: 768,
+                    settings: {
+                      slidesToShow: 1,
+                      slidesToScroll: 1,
+                      touchThreshold: 15
+                    }
+                  }
+                ]}
+              >
+                {isLoading ? (
+                  // Loading skeletons for desktop view
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div key={`skeleton-${index}`} className="h-full py-0.5 px-2">
+                      <div className="price-card bg-white rounded-xl p-3 md:p-4 border border-gray-200 
+                          shadow-sm hover:shadow-md transition-all duration-200 w-full
+                          relative overflow-hidden gpu-render h-[162px]">
+                        <div className="flex flex-col h-full gap-1 md:gap-2 justify-between">
+                          {/* Header with indicator badge */}
+                          <div>
+                            <div className="h-5 w-32 bg-gray-200 animate-pulse rounded-full mb-2"></div>
+                          </div>
+                          
+                          {/* Price Content */}
+                          <div className="flex-1 py-1 md:py-2">
+                            <div className="h-6 w-28 md:w-32 bg-gray-200 animate-pulse mb-3 rounded"></div>
+                            <div className="h-4 w-24 bg-gray-200 animate-pulse mb-2 rounded"></div>
+                            <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
+                          </div>
+                          
+                          {/* Footer */}
+                          <div className="flex items-center justify-between pt-2">
+                            <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
+                            <div className="h-3 w-16 bg-gray-200 animate-pulse rounded"></div>
+                          </div>
                         </div>
                       </div>
                     </div>
+                  ))
+                ) : error ? (
+                  // Error state
+                  <div className="col-span-3 py-0.5 px-2">
+                    {renderErrorContent()}
                   </div>
-                ))
-              ) : error ? (
-                // Error state
-                <div className="col-span-3 py-0.5 px-2">
-                  {renderErrorContent()}
-                </div>
-              ) : lmeData.length === 0 ? (
-                // Empty state
-                <div className="col-span-3 py-0.5 px-2">
-                  {renderEmptyContent()}
-                </div>
-              ) : (
-                // Real data cards - use the shared rendering function
-                lmeData.map((data, index) => (
-                  <div key={`settlement-card-${index}`} className="h-full py-0.5 px-2 box-border">
-                    {renderCard(data, `desktop-card-${index}`)}
+                ) : lmeData.length === 0 ? (
+                  // Empty state
+                  <div className="col-span-3 py-0.5 px-2">
+                    {renderEmptyContent()}
                   </div>
-                ))
-              )}
-            </Slider>
+                ) : (
+                  // Real data cards - use the shared rendering function
+                  lmeData.map((data, index) => (
+                    <div key={`settlement-card-${index}`} className="h-full py-0.5 px-2 box-border">
+                      {renderCard(data, `desktop-card-${index}`)}
+                    </div>
+                  ))
+                )}
+              </Slider>
+            </div>
           </div>
         </div>
 
-        {/* Mobile View - Stacked Cards */}
-        <div className="md:hidden">
+        {/* Mobile View - Stacked Cards - Only rendered on small screens */}
+        <div className="block md:hidden">
           <div className="space-y-2.5">
             {/* Today's Card */}
-            <div className="bg-white/50 p-2 rounded-xl shadow-sm">
+            <div className="bg-white/50 p-1.5 md:p-2 rounded-xl shadow-sm">
               <LiveSpotCard 
                 apiUrl="/api/metal-price?returnAverage=true"
                 unit="/MT" 

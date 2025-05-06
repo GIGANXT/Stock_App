@@ -198,12 +198,12 @@ export default function LiveSpotCard({
     };
 
     return (
-        <div className={`price-card rounded-xl p-3 md:p-4 border 
+        <div className={`price-card rounded-xl p-2 md:p-4 border 
           shadow-sm hover:shadow-sm transition-all duration-150 w-full
-          relative overflow-hidden gpu-render group h-[162px] 
+          relative overflow-hidden gpu-render group
           ${isAveragePrice 
-            ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 border-indigo-200 shadow-indigo-100/50' 
-            : 'bg-white border-gray-200'}`}>
+            ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 border-indigo-200 shadow-indigo-100/50 h-[140px] md:h-[162px]' 
+            : 'bg-white border-gray-200 h-[162px]'}`}>
             
             {/* Background effect - even more subtle */}
             {isAveragePrice ? (
@@ -221,13 +221,13 @@ export default function LiveSpotCard({
               </>
             )}
 
-            <div className="relative flex flex-col h-full gap-1 md:gap-2 justify-between">
+            <div className={`relative flex flex-col h-full ${isAveragePrice ? 'gap-0.5 md:gap-2' : 'gap-1 md:gap-2'} justify-between`}>
                 {/* Header with indicator badge */}
                 <div>
                     {isAveragePrice ? (
-                        <div className="bg-indigo-600 text-white text-xs px-2.5 py-1.5 rounded-lg font-medium inline-flex items-center gap-1.5 mb-2 shadow-sm">
-                            <BarChart3 className="w-3.5 h-3.5 crisp-text" />
-                            <span>Estimated Average CSP</span>
+                        <div className="bg-indigo-600 text-white text-xs px-2 py-1 md:px-2.5 md:py-1.5 rounded-lg font-medium inline-flex items-center gap-1.5 mb-1 md:mb-2 shadow-sm">
+                            <BarChart3 className="w-3 h-3 md:w-3.5 md:h-3.5 crisp-text" />
+                            <span className="text-[10px] md:text-xs">Estimated Average CSP</span>
                         </div>
                     ) : (
                         <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full font-medium inline-flex items-center gap-1.5 mb-2">
@@ -254,21 +254,21 @@ export default function LiveSpotCard({
                             </div>
                         </div>
                     ) : isAveragePrice ? (
-                        <div className="h-[65px] flex flex-row justify-between items-start">
+                        <div className={`${isAveragePrice ? 'h-[50px] md:h-[65px]' : 'h-[65px]'} flex flex-row justify-between items-start`}>
                             <div className="flex flex-col">
-                                <span className="font-mono text-2xl md:text-3xl font-bold text-indigo-700 tracking-tight">
+                                <span className="font-mono text-xl md:text-3xl font-bold text-indigo-700 tracking-tight">
                                     ${formatPrice(currentSpotPrice)}
                                 </span>
-                                <span className="text-xs text-indigo-600 mt-1">
+                                <span className="text-[9px] md:text-xs text-indigo-600 -mt-0.5 md:mt-1">
                                     {unit} • Based on {dataPointsCount} data points
                                 </span>
                             </div>
-                            <div className={`flex flex-col items-end ${trendColor} bg-white/40 p-2 rounded-lg -mt-6 transition-colors duration-200 group-hover:bg-white/50`}>
-                                <TrendIcon className="w-7 h-7 mb-1" />
-                                <span className="font-mono font-bold text-base">
+                            <div className={`flex flex-col items-end ${trendColor} bg-white/40 p-1 md:p-2 rounded-lg -mt-4 md:-mt-6 transition-colors duration-200 group-hover:bg-white/50`}>
+                                <TrendIcon className="w-5 h-5 md:w-7 md:h-7 mb-0 md:mb-1" />
+                                <span className="font-mono font-bold text-sm md:text-base">
                                     {isIncrease ? '+' : '-'}${Math.abs(currentChange).toFixed(2)}
                                 </span>
-                                <span className="text-xs">
+                                <span className="text-[9px] md:text-xs">
                                     {isIncrease ? '+' : '-'}{formatPercent(Math.abs(currentChangePercent))}%
                                 </span>
                             </div>
@@ -300,10 +300,10 @@ export default function LiveSpotCard({
                     {isAveragePrice ? (
                         <>
                             <div className="font-medium flex items-center text-indigo-800">
-                                <Calendar className="w-3.5 h-3.5 mr-1" />
-                                {formatDate(displayTime)}
+                                <Calendar className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1" />
+                                <span className="text-[9px] md:text-xs">{formatDate(displayTime)}</span>
                             </div>
-                            <div className="text-indigo-700 font-medium bg-white/40 px-2 py-0.5 rounded-md">
+                            <div className="text-indigo-700 font-medium bg-white/40 px-1.5 py-0.5 md:px-2 md:py-0.5 rounded-md text-[9px] md:text-xs">
                                 {priceData?.message || 'Live Data'}
                             </div>
                         </>
