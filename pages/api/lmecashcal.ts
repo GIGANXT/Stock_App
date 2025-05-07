@@ -379,47 +379,88 @@ async function calculateAndStoreLMECashSettlement() {
   
     const price_previous = Number(previous_lme_record.Price);
     const previous_date_only = previous_lme_record.date.toString().split('T')[0];
+    const previousLmeDate = new Date(previous_date_only);
   
   console.log(`Using previous LME record from ${previous_date_only} as comparison to ${today_date_only}`);
   
-    // Find the RBI rate for the previous LME date (exact match)
-    let rbi_previous_record = rbiRates.find((rate) => 
-      rate.date.toString().startsWith(previous_date_only)
-  );
-  
-    // If no exact match for previous date, find the most recent RBI rate before or on that date
-    if (!rbi_previous_record) {
-      // Convert previous LME date to a Date object for comparison
-      const previousLmeDate = new Date(previous_date_only);
+    // COMPLETELY REVISED LOGIC:
+    // 1. Log all available RBI rates for debugging
+    console.log("Available RBI rates (date → rate):");
+    rbiRates.forEach(rate => {
+      const dateStr = rate.date.toString().split('T')[0];
+      console.log(`${dateStr} → ${rate.rate}`);
+    });
+    
+    // 2. Format dates consistently and prepare for comparison
+    const todayTimestamp = new Date(today_date_only).getTime();
+    const prevLmeTimestamp = previousLmeDate.getTime();
+    
+    // Find the day before today (logical "yesterday")
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const yesterdayTimestamp = todayTimestamp - oneDayMs;
+    const yesterdayDate = new Date(yesterdayTimestamp);
+    const yesterdayString = yesterdayDate.toISOString().split('T')[0];
+    
+    console.log(`Today: ${today_date_only}, Yesterday: ${yesterdayString}, Previous LME date: ${previous_date_only}`);
+    
+    // 3. First try to find exact match for yesterday
+    let rbi_previous_record = null;
+    
+    // Try to find the RBI rate for yesterday first
+    rbi_previous_record = rbiRates.find(rate => {
+      const rbiDateStr = rate.date.toString().split('T')[0];
+      return rbiDateStr === yesterdayString;
+    });
+    
+    // If we found yesterday's rate, use it
+    if (rbi_previous_record) {
+      console.log(`Found exact RBI rate for yesterday (${yesterdayString}): ${rbi_previous_record.rate}`);
+    } 
+    // Otherwise, find the most recent rate before today
+    else {
+      console.log(`No RBI rate found for yesterday (${yesterdayString}), finding most recent rate before today`);
       
-      // Sort RBI rates by date (newest to oldest)
-      const sortedRbiRates = [...rbiRates].sort((a, b) => 
-        new Date(b.date.toString()).getTime() - new Date(a.date.toString()).getTime()
-      );
+      // Convert all dates to timestamps for consistent comparison
+      const sortedRates = [...rbiRates].map(rate => {
+        const dateStr = rate.date.toString().split('T')[0];
+        return {
+          rate: rate,
+          timestamp: new Date(dateStr).getTime(),
+          dateStr: dateStr
+        };
+      }).sort((a, b) => b.timestamp - a.timestamp); // Sort newest to oldest
       
-      // Find the most recent RBI rate that's on or before the previous LME date
-      for (const rate of sortedRbiRates) {
-        const rbiDate = new Date(rate.date.toString().split('T')[0]);
-        if (rbiDate <= previousLmeDate) {
-          rbi_previous_record = rate;
-          console.log(`Using nearest previous RBI rate from ${rate.date.toString().split('T')[0]} for LME date ${previous_date_only}`);
-        break;
+      // Find the most recent rate before today
+      for (const rateInfo of sortedRates) {
+        if (rateInfo.timestamp < todayTimestamp) {
+          rbi_previous_record = rateInfo.rate;
+          console.log(`Using most recent RBI rate before today: ${rateInfo.dateStr} → ${rbi_previous_record.rate}`);
+          break;
         }
       }
     }
     
     if (!rbi_previous_record) {
       throw new Error('Could not find a suitable previous RBI rate');
-  }
+    }
     
     const rbi_previous = Number(rbi_previous_record.rate);
+    console.log(`Today's values: LME price ${price_today}, RBI rate ${rbi_today} (date: ${today_date_only})`);
+    console.log(`Previous values: LME price ${price_previous}, RBI rate ${rbi_previous} (date: ${rbi_previous_record.date.toString().split('T')[0]})`);
 
   // Calculate differences
   // Dollar Difference = price_today - price_previous
   const dollarDifference = price_today - price_previous;
 
   // INR Difference = (price_today × RBI_today × 1.0825) - (price_previous × rbi_previous × 1.0825)
-  const inrDifference = (price_today * rbi_today * 1.0825) - (price_previous * rbi_previous * 1.0825);
+  const todayComponent = price_today * rbi_today * 1.0825;
+  const previousComponent = price_previous * rbi_previous * 1.0825;
+  const inrDifference = todayComponent - previousComponent;
+  
+  console.log(`INR Difference calculation details:
+    - Today's component: ${price_today} × ${rbi_today} × 1.0825 = ${todayComponent}
+    - Previous component: ${price_previous} × ${rbi_previous} × 1.0825 = ${previousComponent}
+    - Difference: ${todayComponent} - ${previousComponent} = ${inrDifference}`);
 
   // Check if record for this date already exists (using date part only)
     const existingRecord = await prisma.lMECashSettlement.findFirst({
@@ -432,6 +473,7 @@ async function calculateAndStoreLMECashSettlement() {
 
     if (existingRecord) {
     // Update existing record
+      console.log(`Updating existing LME cash settlement record for ${today_date_only}`);
       return await prisma.lMECashSettlement.update({
         where: {
           id: existingRecord.id
@@ -444,6 +486,7 @@ async function calculateAndStoreLMECashSettlement() {
       });
   } else {
     // Create new record
+      console.log(`Creating new LME cash settlement record for ${today_date_only}`);
       return await prisma.lMECashSettlement.create({
         data: {
           date: today_date_full.toString(),
