@@ -42,6 +42,35 @@ export default function LiveSpotCard({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [dataPointsCount, setDataPointsCount] = useState<number>(0);
+    const [lastCashSettlement, setLastCashSettlement] = useState<number | null>(null);
+
+    // Function to fetch the last cash settlement value
+    const fetchLastCashSettlement = async () => {
+        try {
+            const response = await fetch('/api/cash-settlement?getLatest=true', {
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                }
+            });
+            
+            if (!response.ok) {
+                console.error(`Failed to fetch last cash settlement: ${response.status}`);
+                return null;
+            }
+            
+            const data = await response.json();
+            if (data && data.price) {
+                setLastCashSettlement(data.price);
+                return data.price;
+            }
+            
+            return null;
+        } catch (err) {
+            console.error('Error fetching last cash settlement:', err);
+            return null;
+        }
+    };
 
     useEffect(() => {
         const fetchPriceData = async () => {
@@ -89,6 +118,11 @@ export default function LiveSpotCard({
                     setDataPointsCount(data.dataPointsCount);
                 }
                 
+                // Fetch the last cash settlement if not already available
+                if (!lastCashSettlement) {
+                    await fetchLastCashSettlement();
+                }
+                
                 setError(null);
                 } catch (fetchErr: unknown) {
                     clearTimeout(timeoutId);
@@ -107,16 +141,24 @@ export default function LiveSpotCard({
             }
         };
 
-        // Fetch data immediately
-        fetchPriceData();
+        // Fetch the last cash settlement value first
+        fetchLastCashSettlement()
+            .then(() => fetchPriceData())
+            .catch(err => {
+                console.error('Error in initial data fetch:', err);
+                setError('Failed to initialize data');
+                setLoading(false);
+            });
         
         // Set up polling every 2 minutes for average price
         // Average price doesn't need to be updated as frequently
-        const intervalId = setInterval(fetchPriceData, 2 * 60 * 1000);
+        const intervalId = setInterval(() => {
+            fetchPriceData();
+        }, 2 * 60 * 1000);
         
         // Clean up interval on component unmount
         return () => clearInterval(intervalId);
-    }, [apiUrl]);
+    }, [apiUrl, lastCashSettlement]);
 
     // Use API data if available, otherwise use props
     const displayTime = React.useMemo(() => {
@@ -143,24 +185,34 @@ export default function LiveSpotCard({
             return spotPrice; // Fallback to props on error
         }
     }, [priceData, spotPrice]);
-        
+    
+    // Calculate change against last cash settlement value
     const currentChange = React.useMemo(() => {
         try {
+            if (lastCashSettlement && currentSpotPrice) {
+                return currentSpotPrice - lastCashSettlement;
+            }
+            
             return priceData?.change !== undefined ? priceData.change : change;
         } catch (err) {
             console.error('Error calculating change:', err);
             return change; // Fallback to props on error
         }
-    }, [priceData?.change, change]);
-        
+    }, [priceData?.change, change, lastCashSettlement, currentSpotPrice]);
+    
+    // Calculate percent change against last cash settlement value
     const currentChangePercent = React.useMemo(() => {
         try {
+            if (lastCashSettlement && lastCashSettlement > 0 && currentSpotPrice) {
+                return ((currentSpotPrice - lastCashSettlement) / lastCashSettlement) * 100;
+            }
+            
             return priceData?.changePercent !== undefined ? priceData.changePercent : changePercent;
         } catch (err) {
             console.error('Error calculating change percent:', err);
             return changePercent; // Fallback to props on error
         }
-    }, [priceData?.changePercent, changePercent]);
+    }, [priceData?.changePercent, changePercent, lastCashSettlement, currentSpotPrice]);
     
     const isIncrease = currentChange >= 0;
     const trendColor = isIncrease ? "text-green-600" : "text-red-600";
