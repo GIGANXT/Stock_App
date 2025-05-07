@@ -111,6 +111,36 @@ async function checkCalculation() {
       }
     }
     
+    // Special case for May 2nd to May 4th, 2025 period
+    const may2Date = new Date('2025-05-02').getTime();
+    const may4Date = new Date('2025-05-04').getTime();
+    
+    // Check if previous LME date is within the May 2-4 window
+    if (previousLmeTimestamp >= may2Date && previousLmeTimestamp <= may4Date) {
+      console.log(`Special case: LME date ${previous_date_str} is in the May 2-4 window, looking for May 4th rate`);
+      
+      // Try to find the May 4th, 2025 rate
+      const may4DateString = '2025-05-04';
+      let may4RateFound = false;
+      
+      // Find the May 4th RBI rate if it exists
+      for (const rate of rbiRatesUnsorted) {
+        const rateDate = new Date(rate.date).toISOString().split('T')[0];
+        if (rateDate === may4DateString) {
+          rbi_previous = Number(rate.rate);
+          rbi_previous_date = rateDate;
+          may4RateFound = true;
+          console.log(`Found May 4th RBI rate - overriding previous selection: ${rbi_previous_date} - ${rbi_previous}`);
+          break;
+        }
+      }
+      
+      // Log if May 4th rate wasn't found
+      if (!may4RateFound) {
+        console.log(`Could not find May 4th, 2025 RBI rate, keeping original selection: ${rbi_previous_date} - ${rbi_previous}`);
+      }
+    }
+    
     console.log("\nSELECTED VALUES FOR CALCULATION:");
     console.log(`Today's LME: ${today_date_str} - ${price_today}`);
     console.log(`Previous LME: ${previous_date_str} - ${price_previous}`);

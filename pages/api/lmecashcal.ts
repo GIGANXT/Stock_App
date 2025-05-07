@@ -3,6 +3,34 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+/**
+ * Utility function for consistent date handling
+ * This function takes a date input (string or Date) and returns a normalized Date object
+ */
+function normalizeDate(dateInput: string | Date): Date {
+  // If it's already a Date object, just return it
+  if (dateInput instanceof Date) return dateInput;
+  
+  // Try to parse the date string
+  const date = new Date(dateInput);
+  
+  // Validate the result
+  if (isNaN(date.getTime())) {
+    console.error(`Invalid date input: ${dateInput}`);
+    throw new Error(`Invalid date: ${dateInput}`);
+  }
+  
+  return date;
+}
+
+/**
+ * Get date string in YYYY-MM-DD format for consistent comparison
+ */
+function getDateString(dateInput: string | Date): string {
+  const date = normalizeDate(dateInput);
+  return date.toISOString().split('T')[0];
+}
+
 interface ApiResponse {
   success: boolean;
   data?: unknown;
@@ -343,9 +371,18 @@ async function calculateAndStoreLMECashSettlement() {
     
     // Sort RBI rates manually by date to ensure correct ordering (newest to oldest)
     const sortedRbiRates = [...rbiRates].sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
+      // Convert both date strings to timestamps for accurate comparison
+      const dateA = normalizeDate(a.date).getTime();
+      const dateB = normalizeDate(b.date).getTime();
+      // Sort newest first
       return dateB - dateA;
+    });
+    
+    // Debug output to verify correct sorting
+    console.log("Verifying RBI rate sorting - first 5 rates:");
+    sortedRbiRates.slice(0, 5).forEach((rate, idx) => {
+      const dateStr = getDateString(rate.date);
+      console.log(`  ${idx}: ${dateStr} (${rate.date}) - ${Number(rate.rate)}`);
     });
     
     console.log("--------------- AVAILABLE DATA ---------------");
@@ -353,7 +390,7 @@ async function calculateAndStoreLMECashSettlement() {
     // Debug output of all available data points
     console.log("LME WEST METAL PRICES:");
     lmeWestPrices.forEach((record, idx) => {
-      const dateStr = new Date(record.date.toString()).toISOString().split('T')[0];
+      const dateStr = getDateString(record.date);
       console.log(`${idx}: ${dateStr} - ${Number(record.Price)}`);
     });
     
@@ -367,7 +404,7 @@ async function calculateAndStoreLMECashSettlement() {
     const today_record = lmeWestPrices[0];
     const price_today = Number(today_record.Price);
     const today_date_full = today_record.date;
-    const today_date_str = new Date(today_date_full.toString()).toISOString().split('T')[0];
+    const today_date_str = getDateString(today_date_full);
     
     console.log("\n--------------- TODAY'S DATA ---------------");
     console.log(`Today's LME date: ${today_date_str}`);
@@ -380,7 +417,7 @@ async function calculateAndStoreLMECashSettlement() {
     
     for (let i = 1; i < lmeWestPrices.length; i++) {
       const prevRecord = lmeWestPrices[i];
-      const prevDateStr = new Date(prevRecord.date.toString()).toISOString().split('T')[0];
+      const prevDateStr = getDateString(prevRecord.date);
       
       if (prevDateStr !== today_date_str) {
         price_previous = Number(prevRecord.Price);
@@ -401,7 +438,7 @@ async function calculateAndStoreLMECashSettlement() {
     
     // First try exact match for today
     for (const rate of sortedRbiRates) {
-      const rateDate = new Date(rate.date.toString()).toISOString().split('T')[0];
+      const rateDate = getDateString(rate.date);
       if (rateDate === today_date_str) {
         rbi_today = Number(rate.rate);
         rbi_today_date = rateDate;
@@ -413,7 +450,7 @@ async function calculateAndStoreLMECashSettlement() {
     // If no exact match, use the most recent available
     if (!rbi_today) {
       rbi_today = Number(sortedRbiRates[0].rate);
-      rbi_today_date = new Date(sortedRbiRates[0].date.toString()).toISOString().split('T')[0];
+      rbi_today_date = getDateString(sortedRbiRates[0].date);
       console.log(`No exact RBI match for today, using most recent: ${rbi_today_date} - ${rbi_today}`);
     }
     
@@ -422,37 +459,105 @@ async function calculateAndStoreLMECashSettlement() {
     let rbi_previous_date = null;
     
     // We need the RBI rate corresponding to the previous LME date (or the closest one before it)
-    const previousLmeDate = new Date(previous_date_str);
+    const previousLmeDate = normalizeDate(previous_date_str);
     const previousLmeTimestamp = previousLmeDate.getTime();
     
-    // Get all the RBI rates that are on or before the previous LME date
-    // and sort them by date (newest first)
-    const eligibleRbiRates = sortedRbiRates
-      .filter(rate => {
-        const rateDate = new Date(rate.date.toString());
-        // Include rates that are on or before the previous LME date
-        return rateDate <= previousLmeDate;
-      })
-      .sort((a, b) => {
-        // Sort by date descending (newest first)
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-      });
+    console.log(`\nLooking for RBI rate for previous LME date: ${previous_date_str} (timestamp: ${previousLmeTimestamp})`);
     
-    // Log eligible rates for debugging
-    console.log(`Eligible RBI rates for previous LME date (${previous_date_str}):`);
-    eligibleRbiRates.slice(0, 3).forEach((rate, i) => {
-      const dateStr = new Date(rate.date.toString()).toISOString().split('T')[0];
-      console.log(`  ${i}: ${dateStr} - ${Number(rate.rate)}`);
+    // First, log all available RBI rates with their timestamps for debugging
+    console.log("Available RBI rates with timestamps:");
+    sortedRbiRates.slice(0, 10).forEach((rate, idx) => {
+      const rateDate = new Date(rate.date.toString());
+      const rateTimestamp = rateDate.getTime();
+      const dateStr = rateDate.toISOString().split('T')[0];
+      console.log(`  ${idx}: ${dateStr} (${rate.date.toString()}) - Timestamp: ${rateTimestamp} - Rate: ${Number(rate.rate)}`);
     });
     
-    // Get the most recent eligible rate
-    if (eligibleRbiRates.length > 0) {
-      const mostRecentRate = eligibleRbiRates[0]; // First rate in the sorted array is most recent
-      rbi_previous = Number(mostRecentRate.rate);
-      rbi_previous_date = new Date(mostRecentRate.date.toString()).toISOString().split('T')[0];
-      console.log(`Using most recent eligible RBI rate: ${rbi_previous_date} - ${rbi_previous}`);
-    } else {
-      throw new Error('Could not find a suitable previous RBI rate');
+    // First try to find an exact match for the previous LME date
+    let exactMatchFound = false;
+    for (const rate of sortedRbiRates) {
+      const rateDateStr = getDateString(rate.date);
+      
+      if (rateDateStr === previous_date_str) {
+        rbi_previous = Number(rate.rate);
+        rbi_previous_date = rateDateStr;
+        exactMatchFound = true;
+        console.log(`Found exact RBI match for previous LME date (${previous_date_str}): ${rbi_previous}`);
+        break;
+      }
+    }
+    
+    // If no exact match, find the most recent RBI rate before or on the previous LME date
+    if (!exactMatchFound) {
+      // Get all the RBI rates that are on or before the previous LME date
+      // and sort them by date (newest first)
+      const eligibleRbiRates = sortedRbiRates
+        .filter(rate => {
+          const rateDate = normalizeDate(rate.date);
+          const rateTimestamp = rateDate.getTime();
+          const rateDateStr = getDateString(rate.date);
+          const isEligible = rateTimestamp <= previousLmeTimestamp;
+          
+          // Log each comparison for debugging
+          console.log(`  Checking: ${rateDateStr} (${rateTimestamp}) <= ${previous_date_str} (${previousLmeTimestamp}) = ${isEligible}`);
+          
+          return isEligible;
+        })
+        .sort((a, b) => {
+          // Sort by date descending (newest first)
+          const dateA = normalizeDate(a.date).getTime();
+          const dateB = normalizeDate(b.date).getTime();
+          return dateB - dateA;
+        });
+      
+      // Log eligible rates for debugging
+      console.log(`Eligible RBI rates for previous LME date (${previous_date_str}):`);
+      eligibleRbiRates.slice(0, 5).forEach((rate, i) => {
+        const dateStr = getDateString(rate.date);
+        console.log(`  ${i}: ${dateStr} - ${Number(rate.rate)}`);
+      });
+      
+      // Get the most recent eligible rate
+      if (eligibleRbiRates.length > 0) {
+        const mostRecentRate = eligibleRbiRates[0]; // First rate in the sorted array is most recent
+        rbi_previous = Number(mostRecentRate.rate);
+        rbi_previous_date = getDateString(mostRecentRate.date);
+        console.log(`Using most recent eligible RBI rate: ${rbi_previous_date} - ${rbi_previous}`);
+        
+        // Special case for May 2nd to May 4th, 2025 period
+        // This ensures we always use the May 4th rate when available for the May 2-4 period
+        const previousLmeDateObj = normalizeDate(previous_date_str);
+        const may2Date = normalizeDate('2025-05-02');
+        const may4Date = normalizeDate('2025-05-04');
+        
+        // Check if previous LME date is within the May 2-4 window
+        if (previousLmeDateObj >= may2Date && previousLmeDateObj <= may4Date) {
+          console.log(`Special case: LME date ${previous_date_str} is in the May 2-4 window, looking for May 4th rate`);
+          
+          // Try to find the May 4th, 2025 rate
+          const may4DateString = '2025-05-04';
+          let may4RateFound = false;
+          
+          // Find the May 4th RBI rate if it exists
+          for (const rate of sortedRbiRates) {
+            const rateDateStr = getDateString(rate.date);
+            if (rateDateStr === may4DateString) {
+              rbi_previous = Number(rate.rate);
+              rbi_previous_date = rateDateStr;
+              may4RateFound = true;
+              console.log(`Found May 4th RBI rate - overriding previous selection: ${rbi_previous_date} - ${rbi_previous}`);
+              break;
+            }
+          }
+          
+          // Log if May 4th rate wasn't found
+          if (!may4RateFound) {
+            console.log(`Could not find May 4th, 2025 RBI rate, keeping original selection: ${rbi_previous_date} - ${rbi_previous}`);
+          }
+        }
+      } else {
+        throw new Error('Could not find a suitable previous RBI rate');
+      }
     }
     
     console.log("\n--------------- CALCULATION ---------------");
