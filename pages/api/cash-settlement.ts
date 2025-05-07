@@ -78,30 +78,6 @@ async function saveLmeWestMetalPrice(price: number, dateTime: string): Promise<b
   }
 }
 
-// Function to get the latest cash settlement price
-async function getLatestCashSettlementPrice(): Promise<{price: number, date: string} | null> {
-  try {
-    const latestSettlement = await prisma.lME_West_Metal_Price.findFirst({
-      orderBy: [
-        { date: 'desc' },
-        { createdAt: 'desc' }
-      ]
-    });
-    
-    if (latestSettlement) {
-      return {
-        price: latestSettlement.Price,
-        date: latestSettlement.date
-      };
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error fetching latest cash settlement:', error);
-    return null;
-  }
-}
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -110,31 +86,6 @@ export default async function handler(
   res.setHeader('Cache-Control', noCacheHeaders['Cache-Control']);
   res.setHeader('Pragma', noCacheHeaders['Pragma']);
   res.setHeader('Expires', noCacheHeaders['Expires']);
-  
-  // Handle getLatest parameter to return just the price
-  if (req.query.getLatest !== undefined) {
-    try {
-      const latestPrice = await getLatestCashSettlementPrice();
-      
-      if (latestPrice) {
-        return res.status(200).json({
-          price: latestPrice.price,
-          date: latestPrice.date
-        });
-      } else {
-        return res.status(404).json({
-          error: 'No cash settlement data available'
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching latest cash settlement price:', error);
-      return res.status(500).json({
-        error: 'Failed to retrieve latest cash settlement price'
-      });
-    } finally {
-      await prisma.$disconnect();
-    }
-  }
   
   // Get the latest cash settlement data
   try {
