@@ -334,16 +334,19 @@ async function calculateAndStoreLMECashSettlement() {
       throw new Error('Insufficient data: Need at least two LME West Metal Price records');
     }
 
-    // Get all RBI rate records ordered by date (newest first)
-    const rbiRates = await prisma.rBI_Rate.findMany({
-      orderBy: {
-        date: 'desc'
-      }
-    });
+    // Get all RBI rate records
+    const rbiRates = await prisma.rBI_Rate.findMany();
 
     if (rbiRates.length < 2) {
       throw new Error('Insufficient data: Need at least two RBI Rate records');
     }
+    
+    // Sort RBI rates manually by date to ensure correct ordering (newest to oldest)
+    const sortedRbiRates = [...rbiRates].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return dateB - dateA;
+    });
     
     console.log("--------------- AVAILABLE DATA ---------------");
     
@@ -354,8 +357,8 @@ async function calculateAndStoreLMECashSettlement() {
       console.log(`${idx}: ${dateStr} - ${Number(record.Price)}`);
     });
     
-    console.log("\nRBI RATES:");
-    rbiRates.forEach((record, idx) => {
+    console.log("\nRBI RATES (SORTED BY DATE, NEWEST FIRST):");
+    sortedRbiRates.forEach((record, idx) => {
       const dateStr = new Date(record.date.toString()).toISOString().split('T')[0];
       console.log(`${idx}: ${dateStr} - ${Number(record.rate)}`);
     });
@@ -392,12 +395,12 @@ async function calculateAndStoreLMECashSettlement() {
       throw new Error('Could not find a previous LME West Metal Price record with a different date');
     }
 
-    // Step 3: Get the latest RBI rate for today
+    // Step 3: Get the latest RBI rate for today (from sorted array)
     let rbi_today = null;
     let rbi_today_date = null;
     
     // First try exact match for today
-    for (const rate of rbiRates) {
+    for (const rate of sortedRbiRates) {
       const rateDate = new Date(rate.date.toString()).toISOString().split('T')[0];
       if (rateDate === today_date_str) {
         rbi_today = Number(rate.rate);
@@ -409,8 +412,8 @@ async function calculateAndStoreLMECashSettlement() {
     
     // If no exact match, use the most recent available
     if (!rbi_today) {
-      rbi_today = Number(rbiRates[0].rate);
-      rbi_today_date = new Date(rbiRates[0].date.toString()).toISOString().split('T')[0];
+      rbi_today = Number(sortedRbiRates[0].rate);
+      rbi_today_date = new Date(sortedRbiRates[0].date.toString()).toISOString().split('T')[0];
       console.log(`No exact RBI match for today, using most recent: ${rbi_today_date} - ${rbi_today}`);
     }
     
@@ -418,26 +421,44 @@ async function calculateAndStoreLMECashSettlement() {
     let rbi_previous = null;
     let rbi_previous_date = null;
     
-    // Find the last RBI rate before today's date
-    const todayDate = new Date(today_date_str);
-    for (const rate of rbiRates) {
-      const rateDate = new Date(rate.date.toString()).toISOString().split('T')[0];
-      const rateDateObj = new Date(rateDate);
-      
-      if (rateDateObj < todayDate) {
-        rbi_previous = Number(rate.rate);
-        rbi_previous_date = rateDate;
-        console.log(`Found previous day RBI rate: ${rbi_previous_date} - ${rbi_previous}`);
-        break;
-      }
-    }
+    // We need the RBI rate corresponding to the previous LME date (or the closest one before it)
+    const previousLmeDate = new Date(previous_date_str);
+    const previousLmeTimestamp = previousLmeDate.getTime();
     
-    if (!rbi_previous) {
-      throw new Error('Could not find a previous RBI rate');
+    // Get all the RBI rates that are on or before the previous LME date
+    // and sort them by date (newest first)
+    const eligibleRbiRates = sortedRbiRates
+      .filter(rate => {
+        const rateDate = new Date(rate.date.toString());
+        // Include rates that are on or before the previous LME date
+        return rateDate <= previousLmeDate;
+      })
+      .sort((a, b) => {
+        // Sort by date descending (newest first)
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+    
+    // Log eligible rates for debugging
+    console.log(`Eligible RBI rates for previous LME date (${previous_date_str}):`);
+    eligibleRbiRates.slice(0, 3).forEach((rate, i) => {
+      const dateStr = new Date(rate.date.toString()).toISOString().split('T')[0];
+      console.log(`  ${i}: ${dateStr} - ${Number(rate.rate)}`);
+    });
+    
+    // Get the most recent eligible rate
+    if (eligibleRbiRates.length > 0) {
+      const mostRecentRate = eligibleRbiRates[0]; // First rate in the sorted array is most recent
+      rbi_previous = Number(mostRecentRate.rate);
+      rbi_previous_date = new Date(mostRecentRate.date.toString()).toISOString().split('T')[0];
+      console.log(`Using most recent eligible RBI rate: ${rbi_previous_date} - ${rbi_previous}`);
+    } else {
+      throw new Error('Could not find a suitable previous RBI rate');
     }
     
     console.log("\n--------------- CALCULATION ---------------");
-    
+    console.log(`Using: Today's LME (${today_date_str}): ${price_today}, RBI: ${rbi_today}`);
+    console.log(`Using: Previous LME (${previous_date_str}): ${price_previous}, RBI: ${rbi_previous}`);
+
     // Dollar Difference = price_today - price_previous
     const dollarDifference = price_today - price_previous;
     console.log(`Dollar Difference: ${price_today} - ${price_previous} = ${dollarDifference}`);
@@ -452,11 +473,6 @@ async function calculateAndStoreLMECashSettlement() {
     console.log(`  Today component: ${price_today} × ${rbi_today} × ${constant} = ${todayComponent}`);
     console.log(`  Previous component: ${price_previous} × ${rbi_previous} × ${constant} = ${previousComponent}`);
     console.log(`  Difference: ${todayComponent} - ${previousComponent} = ${inrDifference}`);
-
-    // For verification purposes, calculate with the exact values you provided
-    const manualCalculation = (2404.00 * 84.5436 * 1.0825) - (2401.50 * 84.2369 * 1.0825);
-    console.log(`\nExpected calculation using fixed values:`);
-    console.log(`  (2404.00 × 84.5436 × 1.0825) - (2401.50 × 84.2369 × 1.0825) = ${manualCalculation}`);
     
     // Check if record for this date already exists
     const existingRecord = await prisma.lMECashSettlement.findFirst({
@@ -493,8 +509,7 @@ async function calculateAndStoreLMECashSettlement() {
         previousComponent,
         dollarDifference,
         inrDifference
-      },
-      manualCalculation
+      }
     };
     
     console.log("\n--------------- SUMMARY ---------------");
