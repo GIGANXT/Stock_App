@@ -1007,20 +1007,20 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
                   step="0.01"
                 />
               </div>
-              <div className="flex rounded-full overflow-hidden border-2 border-gray-200 active:border-gray-300 shadow-sm">
+              <div className="flex rounded-full overflow-hidden border-2 border-gray-200 active:border-gray-300 shadow-sm min-w-[90px]">
                 <button
                   type="button"
                   onClick={() => setExchangeRateType('RBI')}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${exchangeRateType === 'RBI' ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                  className={`flex-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${exchangeRateType === 'RBI' ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 >
                   RBI
                 </button>
                 <button
                   type="button"
                   onClick={() => setExchangeRateType('SBI')}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${exchangeRateType === 'SBI' ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                  className={`flex-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${exchangeRateType === 'SBI' ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 >
-                  SBI 
+                  SBI
                 </button>
               </div>
             </div>
