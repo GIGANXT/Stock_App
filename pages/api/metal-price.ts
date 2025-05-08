@@ -15,6 +15,7 @@ interface ApiResponse {
   dataPointsCount?: number;
   error?: string;
   message?: string;
+  lastCashSettlementPrice?: number | null;
 }
 
 // New interface for average price data
@@ -24,6 +25,7 @@ interface AveragePriceData {
   changePercent: number;
   lastUpdated: string;
   dataPointsCount: number;
+  lastCashSettlementPrice?: number | null;
 }
 
 // Properly typed cache for API responses
@@ -69,34 +71,35 @@ async function fetchExternalPriceData(): Promise<ExternalApiData> {
     
     console.log(`Attempting to fetch data from external API: ${apiEndpoint}`);
     
-    // Add timeout to avoid hanging requests
+    // Add timeout to avoid hanging requests - increased to 8 seconds
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
     
     try {
-    const response = await fetch(apiEndpoint, {
+      const response = await fetch(apiEndpoint, {
         signal: controller.signal,
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       
       clearTimeout(timeoutId);
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`External API returned status ${response.status}: ${errorText}`);
-      throw new Error(`External API returned status ${response.status}: ${errorText}`);
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`External API returned status ${response.status}: ${errorText}`);
+        throw new Error(`External API returned status ${response.status}: ${errorText}`);
+      }
     
-    const data: ExternalApiData = await response.json();
-    console.log('Successfully fetched external API data:', JSON.stringify(data));
-    return data;
-  } catch (error) {
+      const data: ExternalApiData = await response.json();
+      console.log('Successfully fetched external API data:', JSON.stringify(data));
+      return data;
+    } catch (error) {
       clearTimeout(timeoutId);
-    throw error;
+      console.error("Error in inner fetch:", error);
+      throw error;
     }
   } catch (error) {
     console.error('Error fetching from external API:', error);
@@ -491,9 +494,30 @@ async function calculateDailyAverage(metal: string): Promise<AveragePriceData | 
       }
     });
 
-    // If no records found for today, return null
+    // Get the most recent cash settlement from LME_West_Metal_Price
+    const latestCashSettlement = await prisma.lME_West_Metal_Price.findFirst({
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // If we have a cash settlement price, include it in the result
+    const lastCashSettlementPrice = latestCashSettlement ? Number(latestCashSettlement.Price) : null;
+
+    // If no records found for today but we have a cash settlement, return fallback data
     if (todayRecords.length === 0) {
-      console.log('No records found for average calculation, returning null');
+      if (lastCashSettlementPrice) {
+        console.log('No records found for average calculation, using CSP as fallback');
+        return {
+          averagePrice: lastCashSettlementPrice,
+          change: 0,
+          changePercent: 0,
+          lastUpdated: new Date().toISOString(),
+          dataPointsCount: 0,
+          lastCashSettlementPrice
+        };
+      }
+      console.log('No records found for average calculation and no CSP available, returning null');
       return null;
     }
 
@@ -510,12 +534,30 @@ async function calculateDailyAverage(metal: string): Promise<AveragePriceData | 
     const change = latestPrice - firstPrice;
     const changePercent = (change / firstPrice) * 100;
 
+    // If we have a cash settlement price, calculate change and changePercent based on it
+    if (lastCashSettlementPrice) {
+      // Calculate change as average price minus last cash settlement price
+      const cspChange = averagePrice - lastCashSettlementPrice;
+      // Calculate percent change
+      const cspChangePercent = (cspChange / lastCashSettlementPrice) * 100;
+      
+      return {
+        averagePrice,
+        change: cspChange, // Use the change from last CSP
+        changePercent: cspChangePercent, // Use the percent change from last CSP
+        lastUpdated: latestRecord.lastUpdated.toISOString(),
+        dataPointsCount: todayRecords.length,
+        lastCashSettlementPrice
+      };
+    }
+
     return {
       averagePrice,
       change,
       changePercent,
       lastUpdated: latestRecord.lastUpdated.toISOString(),
-      dataPointsCount: todayRecords.length
+      dataPointsCount: todayRecords.length,
+      lastCashSettlementPrice
     };
   } catch (error) {
     console.error('Error calculating daily average:', error);
@@ -1021,16 +1063,44 @@ export default async function handler(
       const averageData = await calculateDailyAverage(metalParam);
       
       if (averageData) {
+        // Successfully calculated average
         return res.status(200).json({
           type: 'averagePrice',
           spotPrice: averageData.averagePrice,
           change: averageData.change,
           changePercent: averageData.changePercent,
           lastUpdated: averageData.lastUpdated,
-          dataPointsCount: averageData.dataPointsCount
+          dataPointsCount: averageData.dataPointsCount,
+          lastCashSettlementPrice: averageData.lastCashSettlementPrice
         });
       } else {
-        // No average data available, return error
+        // If we couldn't calculate an average, try to at least get the last CSP
+        try {
+          const latestCashSettlement = await prisma.lME_West_Metal_Price.findFirst({
+            orderBy: {
+              createdAt: 'desc'
+            }
+          });
+          
+          if (latestCashSettlement) {
+            // We have a cash settlement but no average - return a basic response
+            const cashPrice = Number(latestCashSettlement.Price);
+            return res.status(200).json({
+              type: 'averagePrice',
+              averagePrice: cashPrice, // Use CSP as fallback average
+              change: 0,
+              changePercent: 0,
+              lastUpdated: new Date().toISOString(),
+              dataPointsCount: 1,
+              lastCashSettlementPrice: cashPrice,
+              message: 'Using last cash settlement as fallback'
+            });
+          }
+        } catch (cspError) {
+          console.error('Error fetching cash settlement fallback:', cspError);
+        }
+        
+        // No average data or CSP available, return error
         console.log('No average data available in database');
         return res.status(404).json({
           type: 'noData',

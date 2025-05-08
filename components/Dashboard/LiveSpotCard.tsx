@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Clock, TrendingUp, TrendingDown, BarChart3, Calendar } from 'lucide-react';
+import { Clock, TrendingUp, TrendingDown, BarChart3, Calendar, AlertCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface LiveSpotCardProps {
@@ -27,6 +27,7 @@ interface ApiResponse {
     message?: string;
     dataPointsCount?: number;
     averagePrice?: number; // Added to support average price data
+    lastCashSettlementPrice?: number; // Added to track last cash settlement price for comparison
 }
 
 export default function LiveSpotCard({
@@ -35,7 +36,7 @@ export default function LiveSpotCard({
     change = 13.00,
     changePercent = 0.48,
     unit = '/MT',
-    apiUrl = '/api/metal-price?forceMetalPrice=true',
+    apiUrl = `/api/metal-price?forceMetalPrice=true&returnAverage=true&_t=${Date.now()}`,
 
 }: LiveSpotCardProps) {
     const [priceData, setPriceData] = useState<ApiResponse | null>(null);
@@ -44,17 +45,15 @@ export default function LiveSpotCard({
     const [dataPointsCount, setDataPointsCount] = useState<number>(0);
 
     useEffect(() => {
-        const fetchPriceData = async () => {
-            try {
-                setLoading(true);
-                setError(null); // Reset error state at start of fetch
-                
-                // Add timeout to prevent hanging requests
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-                
+        const fetchWithRetry = async (url: string, retries = 2, retryDelay = 2000) => {
+            for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
-                    const response = await fetch(apiUrl, { 
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000);
+                    
+                    console.log(`Fetching data from ${url}, attempt ${attempt + 1}/${retries + 1}`);
+                    
+                    const response = await fetch(url, {
                         signal: controller.signal,
                         headers: {
                             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -62,41 +61,80 @@ export default function LiveSpotCard({
                         }
                     });
                     
-                    clearTimeout(timeoutId); // Clear timeout on successful response
-                
-                if (!response.ok) {
-                    if (response.status === 404) {
-                            setError('No price data available in database');
-                    } else {
-                            setError(`Failed to fetch price data: ${response.status}`);
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`API responded with status ${response.status}`);
                     }
-                        setLoading(false);
-                        return;
+                    
+                    return await response.json();
+                } catch (error) {
+                    if (attempt === retries) {
+                        throw error; // Rethrow if we're out of retries
+                    }
+                    
+                    console.log(`Attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`);
+                    await new Promise(r => setTimeout(r, retryDelay));
+                    // Increase delay for next retry (exponential backoff)
+                    retryDelay = retryDelay * 1.5;
                 }
+            }
+            
+            throw new Error('All retry attempts failed');
+        };
+        
+        const fetchPriceData = async () => {
+            try {
+                setLoading(true);
+                setError(null); // Reset error state at start of fetch
                 
-                const data = await response.json();
-                
-                if (data.type === 'noData') {
+                try {
+                    // Use the retry mechanism
+                    const data = await fetchWithRetry(apiUrl);
+                    
+                    if (data.type === 'noData') {
                         setError(data.message || 'No price data available');
                         setLoading(false);
                         return;
-                }
-                
-                setPriceData(data);
-                
-                // Store the data points count if available
-                if (data.type === 'averagePrice' && data.dataPointsCount) {
-                    setDataPointsCount(data.dataPointsCount);
-                }
-                
-                setError(null);
+                    }
+                    
+                    // If we have average price and last cash settlement price, calculate changes based on those
+                    if (data.type === 'averagePrice' && data.lastCashSettlementPrice && data.averagePrice) {
+                        const lastPrice = data.lastCashSettlementPrice;
+                        const currentAvg = data.averagePrice;
+                        data.change = currentAvg - lastPrice;
+                        data.changePercent = (data.change / lastPrice) * 100;
+                    }
+                    
+                    setPriceData(data);
+                    
+                    // Store the data points count if available
+                    if (data.type === 'averagePrice' && data.dataPointsCount) {
+                        setDataPointsCount(data.dataPointsCount);
+                    }
+                    
+                    setError(null);
                 } catch (fetchErr: unknown) {
-                    clearTimeout(timeoutId);
+                    console.error('Fetch error after retries:', fetchErr);
+                    
                     if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
                         setError('Request timed out. Please try again later.');
                     } else {
-                        setError('Network error. Please check your connection.');
-                        console.error('Fetch error:', fetchErr);
+                        setError('Failed to load data. Please try again.');
+                    }
+                    
+                    // Use fallback data if API fails and we're looking for average price
+                    if (apiUrl.includes('returnAverage=true')) {
+                        const fallbackData: ApiResponse = {
+                            type: 'averagePrice',
+                            averagePrice: spotPrice,
+                            change: change,
+                            changePercent: changePercent,
+                            lastUpdated: new Date().toISOString(),
+                            dataPointsCount: 0,
+                            message: 'Using fallback data due to API failure',
+                        };
+                        setPriceData(fallbackData);
                     }
                 }
             } catch (err) {
@@ -110,13 +148,12 @@ export default function LiveSpotCard({
         // Fetch data immediately
         fetchPriceData();
         
-        // Set up polling every 2 minutes for average price
-        // Average price doesn't need to be updated as frequently
-        const intervalId = setInterval(fetchPriceData, 2 * 60 * 1000);
+        // Set up polling with a longer interval to reduce server load
+        const intervalId = setInterval(fetchPriceData, 5 * 60 * 1000);
         
         // Clean up interval on component unmount
         return () => clearInterval(intervalId);
-    }, [apiUrl]);
+    }, [apiUrl, spotPrice, change, changePercent]);
 
     // Use API data if available, otherwise use props
     const displayTime = React.useMemo(() => {
@@ -166,6 +203,9 @@ export default function LiveSpotCard({
     const trendColor = isIncrease ? "text-green-600" : "text-red-600";
     const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
 
+    // Format the change sign correctly for display
+    const displayChangeSign = isIncrease ? '+' : '-';
+
     // Determine if we're showing average price
     const isAveragePrice = priceData?.type === 'averagePrice';
 
@@ -190,7 +230,7 @@ export default function LiveSpotCard({
 
     const formatDate = (date: Date) => {
         try {
-            return format(date, 'dd MMMM yyyy');
+            return format(date, 'dd MMM yyyy');
         } catch (err) {
             console.error('Error formatting date:', err);
             return 'Unknown date';
@@ -262,14 +302,20 @@ export default function LiveSpotCard({
                                 <span className="text-[9px] md:text-xs text-indigo-600 -mt-0.5 md:mt-1">
                                     {unit} • Based on {dataPointsCount} data points
                                 </span>
+                                {priceData?.lastCashSettlementPrice && (
+                                    <span className="text-[9px] md:text-xs text-gray-600 mt-0.5">
+                                        Last CSP: ${formatPrice(priceData.lastCashSettlementPrice)}
+                                    </span>
+                                )}
                             </div>
                             <div className={`flex flex-col items-end ${trendColor} bg-white/40 p-1 md:p-2 rounded-lg -mt-4 md:-mt-6 transition-colors duration-200 group-hover:bg-white/50`}>
                                 <TrendIcon className="w-5 h-5 md:w-7 md:h-7 mb-0 md:mb-1" />
                                 <span className="font-mono font-bold text-sm md:text-base">
-                                    {isIncrease ? '+' : '-'}${Math.abs(currentChange).toFixed(2)}
+                                    {displayChangeSign}${Math.abs(currentChange).toFixed(2)}
                                 </span>
-                                <span className="text-[9px] md:text-xs">
-                                    {isIncrease ? '+' : '-'}{formatPercent(Math.abs(currentChangePercent))}%
+                                <span className="text-[9px] md:text-xs flex items-center gap-0.5" title="Comparison with last Cash Settlement Price from LME">
+                                    <AlertCircle className="w-2.5 h-2.5" /> 
+                                    {displayChangeSign}{formatPercent(Math.abs(currentChangePercent))}% vs. CSP
                                 </span>
                             </div>
                         </div>
@@ -285,10 +331,10 @@ export default function LiveSpotCard({
                             </div>
                             <div className="flex items-baseline gap-2 mt-1">
                                 <span className={`font-mono text-sm font-medium ${trendColor}`}>
-                                    {isIncrease ? '+' : '-'}${Math.abs(currentChange).toFixed(2)}
+                                    {displayChangeSign}${Math.abs(currentChange).toFixed(2)}
                                 </span>
                                 <span className={`text-xs ${trendColor}`}>
-                                    ({isIncrease ? '+' : '-'}{formatPercent(Math.abs(currentChangePercent))}%)
+                                    ({displayChangeSign}{formatPercent(Math.abs(currentChangePercent))}%)
                                 </span>
                             </div>
                         </div>
