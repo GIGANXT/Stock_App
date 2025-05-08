@@ -12,38 +12,6 @@ import {
     ReferenceLine,
 } from 'recharts';
 
-// Static data for MCX months
-const mcxData = {
-    // May data will be fetched from API
-    may: [],
-    june: [
-        { date: '2023-06-01', value: 2420 },
-        { date: '2023-06-02', value: 2430 },
-        { date: '2023-06-05', value: 2445 },
-        { date: '2023-06-06', value: 2460 },
-        { date: '2023-06-07', value: 2455 },
-        { date: '2023-06-08', value: 2470 },
-        { date: '2023-06-09', value: 2485 },
-        { date: '2023-06-12', value: 2490 },
-        { date: '2023-06-13', value: 2500 },
-        { date: '2023-06-14', value: 2510 },
-        { date: '2023-06-15', value: 2525 },
-    ],
-    july: [
-        { date: '2023-07-03', value: 2530 },
-        { date: '2023-07-04', value: 2545 },
-        { date: '2023-07-05', value: 2560 },
-        { date: '2023-07-06', value: 2550 },
-        { date: '2023-07-07', value: 2565 },
-        { date: '2023-07-10', value: 2580 },
-        { date: '2023-07-11', value: 2590 },
-        { date: '2023-07-12', value: 2600 },
-        { date: '2023-07-13', value: 2615 },
-        { date: '2023-07-14', value: 2630 },
-        { date: '2023-07-17', value: 2645 },
-    ],
-};
-
 // Define proper tooltip props type
 interface TooltipProps {
   active?: boolean;
@@ -107,22 +75,23 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
     return null;
 };
 
-interface MCXMonthlyTrendsProps {
-    initialMonth?: 'may' | 'june' | 'july';
+// Keep the interface but component doesn't currently use the prop
+interface MCXNextMonthTrendsProps {
+    initialMonth?: 'june' | 'july' | 'august';
 }
 
-export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTrendsProps) {
-    const [activeMonth] = useState<'may' | 'june' | 'july'>(initialMonth);
+// We still accept props for future use and API consistency
+export default function MCXNextMonthTrends(_props: MCXNextMonthTrendsProps) {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const [mayData, setMayData] = useState<Array<{ date: string, value: number, timestamp: string, displayTime: string }>>([]);
+    const [nextMonthData, setNextMonthData] = useState<Array<{ date: string, value: number, timestamp: string, displayTime: string }>>([]);
     const [, setStats] = useState<{ min: number, max: number, avg: number }>({ min: 0, max: 0, avg: 0 });
     const [viewWindow, setViewWindow] = useState<{ start: number, end: number }>({ start: 0, end: 0 });
     const [windowSize, setWindowSize] = useState<number>(20); // How many data points to show at once
     const chartContainerRef = useRef<HTMLDivElement>(null);
     
-    // Get data for the active month - MOVED UP before any useEffects that depend on it
-    const currentData = activeMonth === 'may' ? mayData : mcxData[activeMonth];
+    // Get data for the active month
+    const currentData = nextMonthData;
     
     // Get visible data based on view window
     const visibleData = useCallback(() => {
@@ -133,11 +102,11 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
         
         // Ensure we don't exceed array bounds
         const newStart = Math.max(0, viewWindow.start);
-        let newEnd = Math.min(dataLength - 1, viewWindow.end);
+        const newEnd = Math.min(dataLength - 1, viewWindow.end);
         
         // If window is invalid, reset it
         if (newEnd < newStart) {
-            newEnd = Math.min(dataLength - 1, newStart + windowSize - 1);
+            return currentData.slice(0, Math.min(dataLength, windowSize));
         }
         
         // Update view window state if needed (but don't trigger a re-render during this callback)
@@ -171,20 +140,20 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
         [key: string]: unknown; // Replace any with unknown for better type safety
     }
 
-    // Fetch May data from API
+    // Fetch Next Month data from API
     useEffect(() => {
-        const fetchMayData = async () => {
+        const fetchNextMonthData = async () => {
             try {
                 setLoading(true);
-                const response = await fetch('/api/mcx_current_month');
+                const response = await fetch('/api/mcx_next_month');
                 if (!response.ok) {
-                    throw new Error('Failed to fetch MCX data');
+                    throw new Error('Failed to fetch MCX next month data');
                 }
                 const data = await response.json();
 
                 if (data.success && data.data) {
                     // Log the raw data to see what we're getting from the server
-                    console.log('Raw data from API:', data.data);
+                    console.log('Raw next month data from API:', data.data);
                     
                     // Format the data for the chart and ensure consistent date format
                     const formattedData = data.data.map((item: APIDataItem) => {
@@ -206,12 +175,12 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                         };
                     });
                     
-                    console.log('Formatted data with timestamp:', formattedData);
+                    console.log('Formatted next month data with timestamp:', formattedData);
                     
                     // Check for the last record in the data
                     if (formattedData.length > 0) {
                         const lastItem = formattedData[formattedData.length - 1];
-                        console.log('Last item in data:', lastItem);
+                        console.log('Last item in next month data:', lastItem);
                         console.log('Last time as Date:', lastItem.displayTime);
                         console.log('Using timestamp:', lastItem.timestamp);
                     }
@@ -223,11 +192,11 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                         return dateA.getTime() - dateB.getTime();
                     });
                     
-                    console.log('Sorted data:', formattedData);
-                    console.log('Total data points:', formattedData.length);
+                    console.log('Sorted next month data:', formattedData);
+                    console.log('Total next month data points:', formattedData.length);
                     
-                    // Update the may data
-                    setMayData(formattedData);
+                    // Update the next month data
+                    setNextMonthData(formattedData);
 
                     // Update stats
                     if (data.stats) {
@@ -243,13 +212,13 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
             } catch (err: unknown) {
                 const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
                 setError(errorMessage);
-                console.error('Error fetching MCX data:', err);
+                console.error('Error fetching MCX next month data:', err);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchMayData();
+        fetchNextMonthData();
     }, []);
 
     // Initialize view window after data is loaded
@@ -263,7 +232,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                 end: currentData.length - 1
             });
         }
-    }, [mayData, activeMonth, currentData.length]);
+    }, [nextMonthData, currentData.length]);
 
     // Memoized scroll function to avoid recreating in every render
     const scrollChart = useCallback((direction: 'left' | 'right') => {
@@ -397,7 +366,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
     }
 
     // Show loading state
-    if (loading && activeMonth === 'may') {
+    if (loading) {
         return (
             <div className="w-full p-6 bg-gray-50 rounded-2xl mt-8">
                 <div className="flex flex-col space-y-6">
@@ -405,7 +374,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                             <div className="w-1.5 h-8 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-                            <h2 className="text-xl font-bold text-gray-800">MCX Aluminum Price Trends</h2>
+                            <h2 className="text-xl font-bold text-gray-800">MCX Aluminum Next Month Prices</h2>
                         </div>
                     </div>
 
@@ -413,7 +382,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 flex items-center justify-center h-[400px]">
                         <div className="flex flex-col items-center">
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
-                            <p className="text-gray-500">Loading MCX data...</p>
+                            <p className="text-gray-500">Loading next month MCX data...</p>
                         </div>
                     </div>
                 </div>
@@ -422,7 +391,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
     }
 
     // Show error state
-    if (error && activeMonth === 'may') {
+    if (error) {
         return (
             <div className="w-full p-6 bg-gray-50 rounded-2xl mt-8">
                 <div className="flex flex-col space-y-6">
@@ -430,7 +399,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                             <div className="w-1.5 h-8 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-                            <h2 className="text-xl font-bold text-gray-800">MCX Aluminum Price Trends</h2>
+                            <h2 className="text-xl font-bold text-gray-800">MCX Aluminum Next Month Prices</h2>
                         </div>
                     </div>
 
@@ -438,7 +407,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 flex items-center justify-center h-[400px]">
                         <div className="flex flex-col items-center text-center">
                             <div className="text-red-500 text-5xl mb-4">⚠️</div>
-                            <p className="text-gray-700 font-medium">Failed to load MCX data</p>
+                            <p className="text-gray-700 font-medium">Failed to load next month MCX data</p>
                             <p className="text-gray-500 mt-2">{error}</p>
                         </div>
                     </div>
@@ -460,7 +429,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                         <div className="w-1.5 h-8 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-                        <h2 className="text-xl font-bold text-gray-800">MCX Aluminum Price Trends</h2>
+                        <h2 className="text-xl font-bold text-gray-800">MCX Aluminum Next Month Prices</h2>
                     </div>
                 </div>
 
@@ -486,7 +455,7 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                                     </div>
                                     {visibleDataPoints.length > 0 && (
                                         <div className="mt-1 text-xs font-medium text-gray-400">
-                                            {(visibleDataPoints[0] as { displayTime?: string, date: string }).displayTime || new Date(visibleDataPoints[0].date).toLocaleString()} to {(visibleDataPoints[visibleDataPoints.length - 1] as { displayTime?: string, date: string }).displayTime || new Date(visibleDataPoints[visibleDataPoints.length - 1].date).toLocaleString()}
+                                            {visibleDataPoints[0].displayTime || new Date(visibleDataPoints[0].date).toLocaleString()} to {visibleDataPoints[visibleDataPoints.length - 1].displayTime || new Date(visibleDataPoints[visibleDataPoints.length - 1].date).toLocaleString()}
                                         </div>
                                     )}
                                 </>
@@ -563,13 +532,13 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                                 }}
                             >
                                 <defs>
-                                    <linearGradient id="mcxLineGradient" x1="0" y1="0" x2="1" y2="0">
+                                    <linearGradient id="nextMonthLineGradient" x1="0" y1="0" x2="1" y2="0">
                                         <stop offset="0%" stopColor="#3B82F6" />
                                         <stop offset="100%" stopColor="#60A5FA" />
                                     </linearGradient>
 
                                     {/* Vertical gradient for area fill */}
-                                    <linearGradient id="mcxAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <linearGradient id="nextMonthAreaGradient" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.9} />
                                         <stop offset="30%" stopColor="#60A5FA" stopOpacity={0.7} />
                                         <stop offset="95%" stopColor="#DBEAFE" stopOpacity={0.2} />
@@ -615,22 +584,22 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
                                 <Area
                                     type="linear"
                                     dataKey="value"
-                                    stroke="url(#mcxLineGradient)"
+                                    stroke="url(#nextMonthLineGradient)"
                                     strokeWidth={2.5}
-                                    fill="url(#mcxAreaGradient)"
+                                    fill="url(#nextMonthAreaGradient)"
                                     fillOpacity={1}
                                     animationDuration={1500}
                                     animationEasing="ease-in-out"
                                     dot={{ 
                                         r: 1.5, 
-                                        fill: '#3B82F6',
+                                        fill: '#10B981',
                                         strokeWidth: 0
                                     }}
                                     activeDot={{
                                         r: 6,
                                         strokeWidth: 2,
                                         fill: '#fff',
-                                        stroke: '#3B82F6',
+                                        stroke: '#10B981',
                                     }}
                                     isAnimationActive={true}
                                 />
@@ -641,4 +610,4 @@ export default function MCXMonthlyTrends({ initialMonth = 'may' }: MCXMonthlyTre
             </div>
         </div>
     );
-}
+} 

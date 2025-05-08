@@ -8,9 +8,9 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    console.log('MCX Current Month API called with query:', req.query);
+    console.log('MCX Third Month API called with query:', req.query);
 
-    // Get the most recent record to determine the current month label
+    // Get the most recent record to determine the third month label
     const latestSnapshot = await prisma.aluminumSnapshot.findFirst({
       orderBy: {
         timestamp: 'desc'
@@ -24,15 +24,15 @@ export default async function handler(
       });
     }
 
-    // Get the current month label (month1Label)
-    const currentMonthLabel = latestSnapshot.month1Label.toLowerCase();
-    console.log(`Current month label: ${currentMonthLabel}`);
+    // Get the third month label (month3Label)
+    const thirdMonthLabel = latestSnapshot.month3Label.toLowerCase();
+    console.log(`Third month label: ${thirdMonthLabel}`);
 
-    // Fetch all records for the current month
+    // Fetch all records for the third month
     const snapshots = await prisma.aluminumSnapshot.findMany({
       where: {
-        month1Label: {
-          equals: currentMonthLabel,
+        month3Label: {
+          equals: thirdMonthLabel,
           mode: 'insensitive' // Case insensitive comparison
         }
       },
@@ -41,8 +41,8 @@ export default async function handler(
       },
       select: {
         timestamp: true,
-        month1Label: true,
-        month1Price: true
+        month3Label: true,
+        month3Price: true
       }
     });
 
@@ -54,7 +54,7 @@ export default async function handler(
     snapshots.forEach(snapshot => {
       const timestamp = snapshot.timestamp;
       const timestampISO = timestamp.toISOString();
-      const price = parseFloat(snapshot.month1Price.toString());
+      const price = parseFloat(snapshot.month3Price.toString());
       
       // Always include the first and last points
       const isFirstOrLast = 
@@ -89,7 +89,7 @@ export default async function handler(
     });
 
     // Convert Map to Array and sort by timestamp
-    const dataPoints = Array.from(processedData.values()).sort((a, b) => 
+    const dataPoints = Array.from(processedData.values()).sort((a: any, b: any) => 
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
@@ -109,18 +109,18 @@ export default async function handler(
     // Return the response
     return res.status(200).json({
       success: true,
-      currentMonth: currentMonthLabel,
+      thirdMonth: thirdMonthLabel,
       data: dataPoints,
       stats,
       lastUpdated: latestSnapshot.timestamp.toISOString()
     });
 
   } catch (error) {
-    console.error('Error fetching MCX current month data:', error);
+    console.error('Error fetching MCX third month data:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch MCX data',
       error: error instanceof Error ? error.message : String(error)
     });
   }
-}
+} 

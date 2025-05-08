@@ -426,7 +426,7 @@ if (!hasStarted) {
 
 async function fetchLatestData(): Promise<ApiResponse | null> {
   return new Promise((resolve, reject) => {
-    const tempEventSource = new EventSourcePolyfill('http://148.135.138.22:5002/stream', {
+    const tempEventSource = new EventSourcePolyfill('http://148.135.138.22:5006/stream', {
       headers: {
         'Accept': 'text/event-stream'
       }
