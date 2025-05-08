@@ -1,6 +1,6 @@
 "use client";
 
-import TrendsPage from "../../components/TrendsPage";
+import TrendsPage from "../../components/Trends/TrendsPage";
 
 export default function Trends() {
   return <TrendsPage />;
