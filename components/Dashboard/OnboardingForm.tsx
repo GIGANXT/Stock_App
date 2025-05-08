@@ -50,7 +50,10 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
     setIsSubmitting(true);
 
     try {
+      console.log("User ID from Clerk:", userId);
+      
       if (!userId) {
+        console.error("No user ID from Clerk auth");
         throw new Error("User not authenticated");
       }
 
@@ -82,13 +85,16 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           userId,
           ...formData,
         }),
       });
 
+      console.log("API Response status:", response.status);
       const data = await response.json();
+      console.log("API Response data:", data);
 
       if (!response.ok) {
         throw new Error(data.message || "Failed to save onboarding data");
