@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Clock, TrendingUp, TrendingDown, BarChart3, Calendar, AlertCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -43,6 +43,9 @@ export default function LiveSpotCard({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [dataPointsCount, setDataPointsCount] = useState<number>(0);
+    
+    // Use a ref to prevent flickering during updates
+    const dataRef = useRef<ApiResponse | null>(null);
 
     useEffect(() => {
         const fetchWithRetry = async (url: string, retries = 2, retryDelay = 2000) => {
@@ -85,7 +88,10 @@ export default function LiveSpotCard({
         
         const fetchPriceData = async () => {
             try {
-                setLoading(true);
+                // Only show loading on initial load, not during updates
+                if (!dataRef.current) {
+                    setLoading(true);
+                }
                 setError(null); // Reset error state at start of fetch
                 
                 try {
@@ -94,7 +100,9 @@ export default function LiveSpotCard({
                     
                     if (data.type === 'noData') {
                         setError(data.message || 'No price data available');
-                        setLoading(false);
+                        if (!dataRef.current) {
+                            setLoading(false);
+                        }
                         return;
                     }
                     
@@ -106,11 +114,19 @@ export default function LiveSpotCard({
                         data.changePercent = (data.change / lastPrice) * 100;
                     }
                     
-                    setPriceData(data);
+                    // Avoid unnecessary re-renders by comparing data
+                    const isSignificantChange = !dataRef.current || 
+                        Math.abs(dataRef.current.spotPrice! - data.spotPrice!) > 0.01 || 
+                        dataRef.current.type !== data.type;
                     
-                    // Store the data points count if available
-                    if (data.type === 'averagePrice' && data.dataPointsCount) {
-                        setDataPointsCount(data.dataPointsCount);
+                    if (isSignificantChange) {
+                        dataRef.current = data;
+                        setPriceData(data);
+                        
+                        // Store the data points count if available
+                        if (data.type === 'averagePrice' && data.dataPointsCount) {
+                            setDataPointsCount(data.dataPointsCount);
+                        }
                     }
                     
                     setError(null);
@@ -124,7 +140,7 @@ export default function LiveSpotCard({
                     }
                     
                     // Use fallback data if API fails and we're looking for average price
-                    if (apiUrl.includes('returnAverage=true')) {
+                    if (apiUrl.includes('returnAverage=true') && !dataRef.current) {
                         const fallbackData: ApiResponse = {
                             type: 'averagePrice',
                             averagePrice: spotPrice,
@@ -134,6 +150,7 @@ export default function LiveSpotCard({
                             dataPointsCount: 0,
                             message: 'Using fallback data due to API failure',
                         };
+                        dataRef.current = fallbackData;
                         setPriceData(fallbackData);
                     }
                 }
@@ -148,68 +165,107 @@ export default function LiveSpotCard({
         // Fetch data immediately
         fetchPriceData();
         
-        // Set up polling with a longer interval to reduce server load
-        const intervalId = setInterval(fetchPriceData, 5 * 60 * 1000);
+        // Set up polling with a longer interval to reduce server load and prevent flickering
+        // Increased interval significantly to reduce flickering while still getting updates
+        const intervalId = setInterval(fetchPriceData, 10 * 60 * 1000); // 10 minutes
         
         // Clean up interval on component unmount
         return () => clearInterval(intervalId);
     }, [apiUrl, spotPrice, change, changePercent]);
 
-    // Use API data if available, otherwise use props
-    const displayTime = React.useMemo(() => {
-        try {
-            return priceData?.lastUpdated
-        ? parseISO(priceData.lastUpdated) 
-        : (lastUpdated || new Date());
-        } catch (err) {
-            console.error('Error parsing date:', err);
-            return new Date(); // Fallback to current date on parse error
-        }
-    }, [priceData?.lastUpdated, lastUpdated]);
-    
-    // Prioritize average price when available (for averagePrice type)
-    const currentSpotPrice = React.useMemo(() => {
-        try {
-            return priceData?.type === 'averagePrice' && priceData?.averagePrice !== undefined
-        ? priceData.averagePrice
-        : priceData?.spotPrice !== undefined
-            ? priceData.spotPrice 
-            : spotPrice;
-        } catch (err) {
-            console.error('Error calculating spot price:', err);
-            return spotPrice; // Fallback to props on error
-        }
-    }, [priceData, spotPrice]);
+    // Render optimizations with useMemo to avoid unnecessary re-renders
+    const cardContent = useMemo(() => {
+        // Determine if we're showing average price
+        const isAveragePrice = priceData?.type === 'averagePrice';
         
-    const currentChange = React.useMemo(() => {
-        try {
-            return priceData?.change !== undefined ? priceData.change : change;
-        } catch (err) {
-            console.error('Error calculating change:', err);
-            return change; // Fallback to props on error
+        // Only calculate values if we have data
+        if (!priceData) {
+            return { loading, error, isAveragePrice };
         }
-    }, [priceData?.change, change]);
         
-    const currentChangePercent = React.useMemo(() => {
-        try {
-            return priceData?.changePercent !== undefined ? priceData.changePercent : changePercent;
-        } catch (err) {
-            console.error('Error calculating change percent:', err);
-            return changePercent; // Fallback to props on error
-        }
-    }, [priceData?.changePercent, changePercent]);
+        // Use API data if available, otherwise use props
+        const displayTime = (() => {
+            try {
+                // First try to parse the date from priceData
+                if (priceData?.lastUpdated) {
+                    const parsedDate = parseISO(priceData.lastUpdated);
+                    // Verify the date is valid
+                    if (!isNaN(parsedDate.getTime())) {
+                        return parsedDate;
+                    }
+                    console.error('Invalid date from API:', priceData.lastUpdated);
+                }
+                
+                // If lastUpdated prop is available and valid, use it
+                if (lastUpdated && !isNaN(lastUpdated.getTime())) {
+                    return lastUpdated;
+                }
+                
+                // If all else fails, return current date
+                return new Date();
+            } catch (err) {
+                console.error('Error parsing date:', err);
+                return new Date(); // Fallback to current date on parse error
+            }
+        })();
+        
+        // Prioritize average price when available (for averagePrice type)
+        const currentSpotPrice = (() => {
+            try {
+                return priceData?.type === 'averagePrice' && priceData?.averagePrice !== undefined
+                    ? priceData.averagePrice
+                    : priceData?.spotPrice !== undefined
+                        ? priceData.spotPrice 
+                        : spotPrice;
+            } catch (err) {
+                console.error('Error calculating spot price:', err);
+                return spotPrice; // Fallback to props on error
+            }
+        })();
+            
+        const currentChange = (() => {
+            try {
+                return priceData?.change !== undefined ? priceData.change : change;
+            } catch (err) {
+                console.error('Error calculating change:', err);
+                return change; // Fallback to props on error
+            }
+        })();
+            
+        const currentChangePercent = (() => {
+            try {
+                return priceData?.changePercent !== undefined ? priceData.changePercent : changePercent;
+            } catch (err) {
+                console.error('Error calculating change percent:', err);
+                return changePercent; // Fallback to props on error
+            }
+        })();
+        
+        const isIncrease = currentChange >= 0;
+        const trendColor = isIncrease ? "text-green-600" : "text-red-600";
+        const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
+        
+        // Format the change sign correctly for display
+        const displayChangeSign = isIncrease ? '+' : '-';
+        
+        return {
+            displayTime,
+            currentSpotPrice,
+            currentChange,
+            currentChangePercent,
+            isIncrease,
+            trendColor,
+            TrendIcon,
+            displayChangeSign,
+            loading,
+            error,
+            isAveragePrice,
+            dataPointsCount: priceData?.type === 'averagePrice' ? (priceData.dataPointsCount || dataPointsCount) : dataPointsCount,
+            lastCashSettlementPrice: priceData?.lastCashSettlementPrice,
+        };
+    }, [priceData, loading, error, dataPointsCount, lastUpdated, spotPrice, change, changePercent]);
     
-    const isIncrease = currentChange >= 0;
-    const trendColor = isIncrease ? "text-green-600" : "text-red-600";
-    const TrendIcon = isIncrease ? TrendingUp : TrendingDown;
-
-    // Format the change sign correctly for display
-    const displayChangeSign = isIncrease ? '+' : '-';
-
-    // Determine if we're showing average price
-    const isAveragePrice = priceData?.type === 'averagePrice';
-
-    // Safe formatting functions
+    // Safe formatting functions - defined outside the render cycle
     const formatPrice = (price: number) => {
         try {
             return price.toFixed(2);
@@ -230,12 +286,31 @@ export default function LiveSpotCard({
 
     const formatDate = (date: Date) => {
         try {
+            // Check if date is valid before formatting
+            if (!date || isNaN(date.getTime())) {
+                console.error('Invalid date received:', date);
+                return 'N/A';
+            }
             return format(date, 'dd MMM yyyy');
         } catch (err) {
             console.error('Error formatting date:', err);
-            return 'Unknown date';
+            return 'N/A';
         }
     };
+
+    // Destructure values from cardContent for cleaner JSX
+    const {
+        displayTime,
+        currentSpotPrice,
+        currentChange,
+        currentChangePercent,
+        isIncrease,
+        trendColor,
+        TrendIcon,
+        displayChangeSign,
+        isAveragePrice,
+        lastCashSettlementPrice,
+    } = cardContent;
 
     return (
         <div className={`price-card rounded-xl p-2 md:p-4 border 
@@ -279,15 +354,15 @@ export default function LiveSpotCard({
 
                 {/* Price Content */}
                 <div className="flex-1">
-                    {loading ? (
+                    {cardContent.loading ? (
                         <div className="py-1 md:py-2 h-[65px] flex flex-col justify-center">
                             <div className="h-6 w-28 md:w-32 bg-gray-200 animate-pulse mb-2 rounded"></div>
                             <div className="h-4 w-24 bg-gray-200 animate-pulse rounded"></div>
                         </div>
-                    ) : error ? (
+                    ) : cardContent.error ? (
                         <div className="h-[65px] flex flex-col justify-center">
                             <div className="flex items-center justify-center bg-red-50 border border-red-200 rounded-md p-3 mb-2">
-                                <p className="text-sm text-red-600 font-medium">{error}</p>
+                                <p className="text-sm text-red-600 font-medium">{cardContent.error}</p>
                             </div>
                             <div className="text-xs text-gray-500 text-center">
                                 Please check if data is available in the database
@@ -300,11 +375,11 @@ export default function LiveSpotCard({
                                     ${formatPrice(currentSpotPrice)}
                                 </span>
                                 <span className="text-[9px] md:text-xs text-indigo-600 -mt-0.5 md:mt-1">
-                                    {unit} • Based on {dataPointsCount} data points
+                                    {unit} • Based on {cardContent.dataPointsCount} data points
                                 </span>
-                                {priceData?.lastCashSettlementPrice && (
+                                {lastCashSettlementPrice && (
                                     <span className="text-[9px] md:text-xs text-gray-600 mt-0.5">
-                                        Last CSP: ${formatPrice(priceData.lastCashSettlementPrice)}
+                                        Last CSP: ${formatPrice(lastCashSettlementPrice)}
                                     </span>
                                 )}
                             </div>
@@ -347,7 +422,11 @@ export default function LiveSpotCard({
                         <>
                             <div className="font-medium flex items-center text-indigo-800">
                                 <Calendar className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1" />
-                                <span className="text-[9px] md:text-xs">{formatDate(displayTime)}</span>
+                                <span className="text-[9px] md:text-xs">
+                                    {displayTime instanceof Date && !isNaN(displayTime.getTime()) 
+                                        ? formatDate(displayTime) 
+                                        : 'N/A'}
+                                </span>
                             </div>
                             <div className="text-indigo-700 font-medium bg-white/40 px-1.5 py-0.5 md:px-2 md:py-0.5 rounded-md text-[9px] md:text-xs">
                                 {priceData?.message || ''}
@@ -356,7 +435,9 @@ export default function LiveSpotCard({
                     ) : (
                         <>
                             <div className="font-medium">
-                                {formatDate(displayTime)}
+                                {displayTime instanceof Date && !isNaN(displayTime.getTime())
+                                    ? formatDate(displayTime)
+                                    : 'N/A'}
                             </div>
                             <div>
                                 {priceData?.message || ''}

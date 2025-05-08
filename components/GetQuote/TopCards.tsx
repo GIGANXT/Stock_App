@@ -1,9 +1,14 @@
 "use client";
 
-import React from 'react';
+import React, { memo } from 'react';
 import LiveSpotCard from '../Dashboard/LiveSpotCard';
 import MCXAluminium from '../Dashboard/MCXAluminium';
 import MonthlyCashSettlement from '../Dashboard/MonthlyCashSettlement';
+
+// Memoize child components to prevent unnecessary re-renders
+const MemoizedLiveSpotCard = memo(LiveSpotCard);
+const MemoizedMCXAluminium = memo(MCXAluminium);
+const MemoizedMonthlyCashSettlement = memo(MonthlyCashSettlement);
 
 const TopCards = () => {
   return (
@@ -25,17 +30,17 @@ const TopCards = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
           <div className="w-full md:col-span-3">
-            <LiveSpotCard />
+            <MemoizedLiveSpotCard />
           </div>
           <div className="w-full md:col-span-3">
             <div className="monthly-cash-wrapper">
-              <MonthlyCashSettlement />
+              <MemoizedMonthlyCashSettlement />
             </div>
           </div>
           <div className="w-full md:col-span-6">
             {/* Custom styling wrapper for MCXAluminium to control height and width */}
             <div className="mcx-top-card-wrapper">
-              <MCXAluminium />
+              <MemoizedMCXAluminium />
             </div>
             {/* Add custom CSS to modify the MCXAluminium card */}
             <style jsx global>{`
@@ -48,6 +53,40 @@ const TopCards = () => {
                 overflow: visible !important; /* Allow content to be visible */
                 padding: 0.75rem !important; /* Reduce overall padding */
                 position: relative !important;
+              }
+              
+              /* Fix flickering issue in LiveSpotCard */
+              .price-card {
+                will-change: transform !important;
+                transform: translateZ(0) !important;
+                backface-visibility: hidden !important;
+                perspective: 1000px !important;
+                /* Prevent content shift */
+                min-height: 162px !important;
+                max-height: 162px !important;
+                overflow: hidden !important;
+              }
+              
+              /* Prevent layout shifts by fixing height of content areas */
+              .price-card .flex-1 {
+                height: 65px !important;
+                min-height: 65px !important;
+                max-height: 65px !important;
+                position: relative !important;
+              }
+              
+              /* Prevent transitions on initial load */
+              .price-card:not(:hover) {
+                transition: none !important;
+              }
+              
+              /* Fix flickering in MCX component */
+              .mcx-top-card-wrapper > div, 
+              .monthly-cash-wrapper > div {
+                will-change: transform !important;
+                transform: translateZ(0) !important;
+                backface-visibility: hidden !important;
+                perspective: 1000px !important;
               }
               
               /* Fix loading state height */
@@ -505,4 +544,4 @@ const TopCards = () => {
   );
 };
 
-export default TopCards;
+export default memo(TopCards);
