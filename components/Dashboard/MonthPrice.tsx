@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { TrendingUp, TrendingDown, RefreshCw, Maximize2, LineChart, Info, BarChart2 } from "lucide-react";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
+import { useMetalPrice } from "../../context/MetalPriceContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
 interface PriceData {
@@ -29,6 +30,7 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { addExpandedComponent } = useExpandedComponents();
+  const { triggerRefresh, registerRefreshListener } = useMetalPrice();
   const retryCountRef = useRef(0);
   const maxRetries = 5;
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -90,7 +92,7 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
     }
   };
 
-  // Manual refresh handler that resets retry count
+  // Manual refresh handler that resets retry count and triggers shared refresh
   const handleManualRefresh = () => {
     // Reset retry count when manually refreshing
     retryCountRef.current = 0;
@@ -99,6 +101,9 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
     if (!pollIntervalRef.current) {
       startPolling();
     }
+    
+    // Trigger global refresh for all price components
+    triggerRefresh();
     
     fetchData(true);
   };
@@ -123,13 +128,21 @@ export default function MonthPrice({ expanded = false }: MonthPriceProps) {
     // Start polling
     startPolling();
     
+    // Register this component for synchronized refreshes
+    const unregister = registerRefreshListener(() => {
+      console.log("MonthPrice received refresh signal");
+      fetchData(true);
+    });
+    
     // Cleanup function
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
+      // Unregister from refresh notifications
+      unregister();
     };
-  }, []);
+  }, [registerRefreshListener]);
 
   // Add visibility change listener to pause/resume polling when tab is hidden/visible
   useEffect(() => {

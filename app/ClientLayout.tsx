@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Layout from "../components/Layout";
 import { ExpandedComponentsProvider } from "../context/ExpandedComponentsContext";
+import { MetalPriceProvider } from "../context/MetalPriceContext";
 
 interface ClientLayoutProps {
   children: React.ReactNode;
@@ -29,7 +30,9 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
 
   return (
     <ExpandedComponentsProvider>
-      <Layout>{children}</Layout>
+      <MetalPriceProvider>
+        <Layout>{children}</Layout>
+      </MetalPriceProvider>
     </ExpandedComponentsProvider>
   );
 }

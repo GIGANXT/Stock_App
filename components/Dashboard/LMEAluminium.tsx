@@ -4,13 +4,24 @@ import React, { useState, useEffect, useRef } from "react";
 import { TrendingUp, TrendingDown, Maximize2, Wifi, LineChart, RefreshCw, BarChart2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useExpandedComponents } from "../../context/ExpandedComponentsContext";
+import { useMetalPrice } from "../../context/MetalPriceContext";
 import ExpandedModalWrapper from "./ExpandedModalWrapper";
 
 interface PriceData {
-    spotPrice: number;
-    change: number;
-    changePercent: number;
-    lastUpdated: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  timestamp?: string;
+  timeSpan?: string;
+  isCached?: boolean;
+  error?: string;
+}
+
+interface SpotPriceData {
+  spotPrice: number;
+  change: number;
+  changePercent: number;
+  lastUpdated: string;
 }
 
 interface LMEAluminiumProps {
@@ -20,11 +31,198 @@ interface LMEAluminiumProps {
 export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
   const [showAddOptions, setShowAddOptions] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [priceData, setPriceData] = useState<PriceData | null>(null);
+  const [priceData, setPriceData] = useState<PriceData>({
+    price: 0,
+    change: 0,
+    changePercent: 0
+  });
+  const [spotPriceData, setSpotPriceData] = useState<SpotPriceData>({
+    spotPrice: 0,
+    change: 0,
+    changePercent: 0,
+    lastUpdated: new Date().toISOString()
+  });
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { addExpandedComponent } = useExpandedComponents();
+  const { triggerRefresh, registerRefreshListener } = useMetalPrice();
+  const retryCountRef = useRef(0);
+  const maxRetries = 5;
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Function to save the calculated spot price to database
+  const saveSpotPrice = async (threeMonthPrice: number, timestamp: string) => {
+    try {
+      const response = await fetch('/api/spot-price-update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          threeMonthPrice,
+          timestamp
+        })
+      });
+
+      const result = await response.json();
+      console.log('Saved spot price to database:', result);
+      
+      // If we get a successful response, update the UI with the calculated spot price
+      if (result.success && result.data) {
+        setSpotPriceData({
+          spotPrice: result.data.spotPrice,
+          change: result.data.change,
+          changePercent: result.data.changePercent,
+          lastUpdated: result.data.lastUpdated
+        });
+      }
+      
+      return result;
+    } catch (err) {
+      console.error('Error saving spot price to database:', err);
+    }
+  };
+
+  const fetchData = async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) {
+        setIsRefreshing(true);
+      }
+      
+      // Add cache-busting parameter to prevent stale responses
+      const timestamp = new Date().getTime();
+      const res = await fetch(`/api/price?_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!res.ok) throw new Error('Failed to fetch data');
+      
+      const data = await res.json();
+      
+      console.log('Received 3-month price data from API:', data);
+      
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setPriceData(data);
+        
+        // Send the 3-month price to the server to calculate and store the spot price
+        // The calculation will use the change from the previous entry
+        await saveSpotPrice(
+          data.price, 
+          data.timestamp || new Date().toISOString()
+        );
+        
+        setError(null);
+        // Reset retry count on successful fetch
+        retryCountRef.current = 0;
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      
+      // Increment retry count
+      retryCountRef.current += 1;
+      
+      if (retryCountRef.current <= maxRetries) {
+        // Show a more informative error message
+        setError(`Connection issue. Retry ${retryCountRef.current}/${maxRetries}...`);
+      } else {
+        // After max retries, show a detailed message but keep the last valid data
+        setError('Connection lost. Please refresh manually.');
+        
+        // Stop automatic polling if we've reached max retries
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    } finally {
+      if (isManualRefresh) {
+        setIsRefreshing(false);
+      }
+      setLoading(false);
+    }
+  };
+
+  // Manual refresh handler that resets retry count and triggers shared refresh
+  const handleManualRefresh = () => {
+    // Reset retry count when manually refreshing
+    retryCountRef.current = 0;
+    
+    // Restart polling if it was stopped
+    if (!pollIntervalRef.current) {
+      startPolling();
+    }
+    
+    // Trigger global refresh for all price components
+    triggerRefresh();
+    
+    fetchData(true);
+  };
+
+  // Function to start polling with longer interval (30 seconds instead of 5)
+  const startPolling = () => {
+    // Clear any existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+    
+    // Start a new polling interval - 30 seconds is more reasonable than 5 seconds
+    pollIntervalRef.current = setInterval(() => {
+      fetchData(false);
+    }, 30000); // 30 seconds
+  };
+
+  useEffect(() => {
+    // Initial fetch
+    fetchData(false);
+    
+    // Start polling
+    startPolling();
+    
+    // Register this component for synchronized refreshes
+    const unregister = registerRefreshListener(() => {
+      console.log("LMEAluminium received refresh signal");
+      fetchData(true);
+    });
+    
+    // Cleanup function
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+      // Unregister from refresh notifications
+      unregister();
+    };
+  }, [registerRefreshListener]);
+
+  // Add visibility change listener to pause/resume polling when tab is hidden/visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Tab is active again, refresh data and restart polling
+        fetchData(false);
+        startPolling();
+      } else {
+        // Tab is hidden, pause polling to save resources
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   // Add click-away listener to close dropdown
   useEffect(() => {
@@ -40,64 +238,15 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
     };
   }, []);
 
-  const fetchPriceData = async () => {
-    try {
-      setIsRefreshing(true);
-      // Allow forceMetalPrice to get fresh data when needed, but still save to database
-      const response = await fetch('/api/metal-price?forceMetalPrice=true');
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          // Specifically handle case when no data exists in database
-          throw new Error('No price data available in database');
-        } else {
-          throw new Error(`Failed to fetch price data: ${response.status}`);
-        }
-      }
-      
-      const data = await response.json();
-      
-      if (data.type === 'noData') {
-        // API returned success but with noData type
-        throw new Error(data.message || 'No price data available');
-      }
-      
-      setPriceData(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching price data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load price data');
-    } finally {
-      setIsRefreshing(false);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPriceData();
-    
-    // Reduce polling frequency to every 15 minutes instead of every minute
-    // This will significantly reduce the number of database entries
-    const intervalId = setInterval(fetchPriceData, 15 * 60 * 1000);
-    
-    // Clean up interval on component unmount
-    return () => clearInterval(intervalId);
-  }, []);
-
-  // Use API data if available, otherwise use default values
-  const spotPrice = priceData?.spotPrice || 2650;
-  const spotChange = priceData?.change || 0;
-  const spotChangePercent = priceData?.changePercent || 0;
-  const displayedTime = priceData?.lastUpdated 
-    ? parseISO(priceData.lastUpdated) 
-    : new Date();
-  const isIncrease = spotChange >= 0;
-
   // Handle add component selection
   const handleAddComponent = (componentType: 'MCXAluminium' | 'MonthPrice' | 'RatesDisplay') => {
     addExpandedComponent(componentType);
     setShowAddOptions(false);
   };
+
+  const { timestamp, isCached } = priceData;
+  const { spotPrice, change, changePercent } = spotPriceData;
+  const isIncrease = change >= 0;
 
   // Render expanded content
   const renderExpandedContent = () => (
@@ -143,7 +292,7 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchPriceData}
+            onClick={handleManualRefresh}
             disabled={isRefreshing}
             className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full"
           >
@@ -152,50 +301,79 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center h-[300px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-sm text-gray-500 mt-2">Loading price data...</p>
-        </div>
-      ) : error ? (
-        <div className="bg-red-50 rounded-lg p-3 border border-red-100">
-          <p className="text-sm text-red-500">{error}</p>
-          <p className="text-xs text-gray-500">Using default values</p>
-        </div>
-      ) : (
-        <>
-          <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-500">Current Spot Price</span>
-              <div className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded-full">
-                <span>Last Updated: {format(displayedTime, 'HH:mm:ss')}</span>
-              </div>
+      <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-gray-500">Current Spot Price</span>
+          {!loading && timestamp && (
+            <div className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded-full">
+              <span>Updated at: {new Date(timestamp).toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric' 
+              }).replace(/ /g, '-')}</span>
             </div>
-            
-            <div className="flex items-baseline gap-1 mb-3">
+          )}
+        </div>
+        
+        <div className="flex items-baseline gap-1 mb-3">
+          {loading ? (
+            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded"></div>
+          ) : (
+            <>
               <span className="font-mono font-bold text-3xl text-blue-600">
                 ${spotPrice.toFixed(2)}
               </span>
               <span className="text-gray-500">/MT</span>
-            </div>
+            </>
+          )}
+        </div>
 
-            <div className={`flex items-center gap-2 mt-2 ${isIncrease ? "text-green-600" : "text-red-600"} relative z-10`}>
-              <div className={`p-1 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
-                {isIncrease ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              </div>
-              <span className="font-medium">
-                {isIncrease ? "+" : ""}{spotChangePercent.toFixed(2)}%
+        {loading ? (
+          <div className="h-10 bg-gray-200 animate-pulse rounded-lg"></div>
+        ) : error ? (
+          <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-xs text-gray-500">Using default values</p>
+          </div>
+        ) : (
+          <div className={`flex items-center gap-2 ${isIncrease ? "text-green-600" : "text-red-600"} bg-white p-2 rounded-lg border ${isIncrease ? "border-green-100" : "border-red-100"}`}>
+            <div className={`p-1 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
+              {isIncrease ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            </div>
+            <div>
+              <span className="text-sm font-medium">
+                {isIncrease ? "+" : ""}{change.toFixed(2)} ({changePercent.toFixed(2)}%)
               </span>
+              <p className="text-xs text-gray-500">From previous close</p>
             </div>
           </div>
+        )}
+        
+        {!loading && isCached && (
+          <div className="mt-2 flex items-center gap-1 text-yellow-600 bg-yellow-50 p-1.5 rounded text-xs border border-yellow-100">
+            <Wifi className="w-3.5 h-3.5" />
+            <span>Showing cached data</span>
+          </div>
+        )}
+      </div>
 
-          <div className="border-t border-gray-200 pt-3">
-            <div className="flex items-center gap-1.5 text-blue-700 mb-2">
-              <LineChart className="w-3.5 h-3.5" />
-              <h3 className="text-sm font-medium">Market Insight</h3>
-            </div>
-            
-            <div className="space-y-3">
+      <div className="border-t border-gray-200 pt-3">
+        <div className="flex items-center gap-1.5 text-blue-700 mb-2">
+          <LineChart className="w-3.5 h-3.5" />
+          <h3 className="text-sm font-medium">Market Insight</h3>
+        </div>
+        
+        <div className="space-y-3">
+          {loading ? (
+            <>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-full"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-11/12"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-10/12"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-full"></div>
+              <div className="h-3 bg-gray-200 animate-pulse rounded w-9/12"></div>
+            </>
+          ) : (
+            <>
               <p className="text-xs text-gray-600">
                 The current spot price reflects immediate market conditions for aluminium delivery. Today&apos;s {isIncrease ? "increase" : "decrease"} indicates {isIncrease ? "strengthening" : "weakening"} demand in the physical market.
               </p>
@@ -206,15 +384,19 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
               
               <div className="text-xs text-gray-500 mt-2 flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <Wifi className="w-3 h-3" />
-                  <span>Updated: {format(displayedTime, 'HH:mm:ss, dd MMM yyyy')}</span>
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Updated at: {timestamp ? new Date(timestamp).toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric' 
+                  }).replace(/ /g, '-') : 'N/A'}</span>
                 </div>
                 <span>LME London</span>
               </div>
-            </div>
-          </div>
-        </>
-      )}
+            </>
+          )}
+        </div>
+      </div>
     </>
   );
 
@@ -243,13 +425,19 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
             <div className="relative">
               <BarChart2 className="w-4 h-4 text-blue-600" />
             </div>
-            <h2 className="text-base font-bold text-blue-600">Spot Price</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-blue-600">Spot Price</h2>
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 font-semibold leading-none">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                <span>LIVE</span>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={fetchPriceData}
-              className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
+              onClick={handleManualRefresh}
               disabled={isRefreshing}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
             >
               <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
@@ -263,38 +451,45 @@ export default function LMEAluminium({ expanded = false }: LMEAluminiumProps) {
           </div>
         </div>
 
-        {loading ? (
-          <div className="relative z-10">
-            <div className="h-9 w-32 bg-gray-200 animate-pulse rounded mb-2"></div>
-            <div className="h-6 w-36 bg-gray-200 animate-pulse rounded"></div>
-          </div>
-        ) : error ? (
-          <div className="relative z-10">
-            <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-2">
-              <p className="text-sm text-red-600 font-medium">{error}</p>
-            </div>
-            <div className="text-xs text-gray-500">
-              Please check if price data is available in the database
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-2 relative z-10">
+        {error && <p className="text-xs text-red-500 mb-2 relative z-10">{error}</p>}
+        {!loading && isCached && <p className="text-xs text-yellow-500 mb-2 relative z-10">Showing cached data</p>}
+
+        <div className="flex items-baseline gap-1 relative z-10">
+          {loading ? (
+            <div className="h-9 w-32 bg-gray-200 animate-pulse rounded"></div>
+          ) : (
+            <>
               <span className="font-mono font-bold text-3xl text-blue-600">
                 ${spotPrice.toFixed(2)}
               </span>
-              <span className="text-gray-500">/MT</span>
-            </div>
+              <span className="text-sm text-gray-500">/MT</span>
+            </>
+          )}
+        </div>
 
-            <div className={`flex items-center gap-2 mt-2 ${isIncrease ? "text-green-600" : "text-red-600"} relative z-10`}>
-              <div className={`p-1 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
-                {isIncrease ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              </div>
-              <span className="font-medium">
-                {isIncrease ? "+" : ""}{spotChangePercent.toFixed(2)}%
-              </span>
+        {loading ? (
+          <div className="h-6 w-36 bg-gray-200 animate-pulse rounded mt-1.5"></div>
+        ) : (
+          <div className={`flex items-center gap-1.5 mt-1.5 ${isIncrease ? "text-green-600" : "text-red-600"} relative z-10`}>
+            <div className={`p-0.5 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
+              {isIncrease ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
             </div>
-          </>
+            <span className="text-sm font-medium">
+              {isIncrease ? "+" : ""}{change.toFixed(2)} ({changePercent.toFixed(2)}%)
+            </span>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="h-4 w-40 bg-gray-200 animate-pulse rounded mt-2"></div>
+        ) : timestamp && (
+          <div className="text-xs text-gray-500 mt-2 relative z-10">
+            Updated at: {new Date(timestamp).toLocaleDateString('en-GB', { 
+              day: '2-digit', 
+              month: 'short', 
+              year: 'numeric' 
+            }).replace(/ /g, '-')}
+          </div>
         )}
       </div>
     </>

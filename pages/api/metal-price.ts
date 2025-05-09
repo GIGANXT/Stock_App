@@ -878,14 +878,20 @@ export default async function handler(
         metalParam = Array.isArray(req.query.metal) ? req.query.metal[0] : req.query.metal as string;
       }
       
-      const { spotPrice, change, changePercent, lastUpdated } = req.body;
+      const { spotPrice, change, lastUpdated } = req.body;
       
-      if (!spotPrice) {
-        return res.status(400).json({ error: 'Bad request', message: 'spotPrice is required' });
+      // We only validate that we have either spotPrice or change, as we only need change
+      if ((!spotPrice && !change) || (change === undefined)) {
+        return res.status(400).json({ error: 'Bad request', message: 'change value is required' });
       }
       
       // Format date from string or use current date
       const formattedDate = lastUpdated ? new Date(lastUpdated) : new Date();
+      
+      // Extract the change value only
+      const changeValue = Number(change || 0);
+      
+      console.log(`Processing update with change value: ${changeValue} (storing only change, setting spotPrice and changePercent to 0.0)`);
       
       // Check if this data already exists to prevent duplicates
       const existingRecord = await prisma.metalPrice.findFirst({
@@ -896,34 +902,52 @@ export default async function handler(
       });
       
       if (existingRecord) {
-        console.log('Record with same timestamp already exists, skipping');
+        console.log('Record with same timestamp already exists, updating change value only');
+        
+        // Update the existing record's change value
+        const updatedRecord = await prisma.metalPrice.update({
+          where: { id: existingRecord.id },
+          data: {
+            change: changeValue,
+            // Keep spotPrice and changePercent as 0.0
+            spotPrice: 0.0,
+            changePercent: 0.0,
+            lastUpdated: formattedDate
+          }
+        });
+        
         return res.status(200).json({ 
-          success: false, 
-          message: 'Duplicate record with same timestamp exists',
-          existingRecord: {
-            id: existingRecord.id,
-            spotPrice: Number(existingRecord.spotPrice),
-            lastUpdated: existingRecord.lastUpdated.toISOString()
+          success: true, 
+          message: 'Updated existing record with new change value',
+          record: {
+            id: updatedRecord.id,
+            metal: updatedRecord.metal,
+            // Response includes all values
+            spotPrice: Number(updatedRecord.spotPrice),
+            change: Number(updatedRecord.change),
+            changePercent: Number(updatedRecord.changePercent),
+            lastUpdated: updatedRecord.lastUpdated.toISOString()
           }
         });
       }
       
-      // Save new record to database
+      // Save new record to database with only change value
       const newRecord = await prisma.metalPrice.create({
         data: {
           metal: metalParam,
-          spotPrice: Number(spotPrice),
-          change: Number(change || 0),
-          changePercent: Number(changePercent || 0),
+          // Set spotPrice and changePercent to 0.0
+          spotPrice: 0.0,
+          change: changeValue,
+          changePercent: 0.0,
           lastUpdated: formattedDate
         }
       });
       
-      console.log(`Added new price record: ${metalParam}, ${spotPrice}, ${formattedDate}`);
+      console.log(`Added new price record with change value: ${changeValue}, date: ${formattedDate}`);
       
       return res.status(201).json({
         success: true,
-        message: 'Price data added to database',
+        message: 'Change value added to database',
         record: {
           id: newRecord.id,
           metal: newRecord.metal,
