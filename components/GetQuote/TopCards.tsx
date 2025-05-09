@@ -1,14 +1,328 @@
 "use client";
 
-import React, { memo } from 'react';
+import React, { memo, useEffect, useState, useRef } from 'react';
 import LiveSpotCard from '../Dashboard/LiveSpotCard';
 import MCXAluminium from '../Dashboard/MCXAluminium';
 import MonthlyCashSettlement from '../Dashboard/MonthlyCashSettlement';
+import { useMetalPrice } from '../../context/MetalPriceContext';
+import { Clock } from 'lucide-react';
 
-// Memoize child components to prevent unnecessary re-renders
-const MemoizedLiveSpotCard = memo(LiveSpotCard);
-const MemoizedMCXAluminium = memo(MCXAluminium);
-const MemoizedMonthlyCashSettlement = memo(MonthlyCashSettlement);
+// Wrapper component that adds context awareness to existing components
+const SynchronizedLiveSpotCard = memo(() => {
+  const { triggerRefresh, registerRefreshListener } = useMetalPrice();
+  const [refreshTrigger, setRefreshTrigger] = useState(Date.now());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [priceData, setPriceData] = useState({
+    price: 0,
+    change: 0,
+    changePercent: 0,
+    timestamp: ""
+  });
+  const [spotPriceData, setSpotPriceData] = useState({
+    spotPrice: 0,
+    change: 0,
+    changePercent: 0,
+    lastUpdated: new Date().toISOString()
+  });
+  const retryCountRef = useRef(0);
+  const maxRetries = 5;
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const initialFetchRef = useRef(false);
+  
+  // Function to save the calculated spot price to database - identical to LMEAluminium
+  const saveSpotPrice = async (threeMonthPrice: number, timestamp: string) => {
+    try {
+      const response = await fetch('/api/spot-price-update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          threeMonthPrice,
+          timestamp
+        })
+      });
+
+      const result = await response.json();
+      console.log('Saved spot price to database:', result);
+      
+      // If we get a successful response, update the UI with the calculated spot price
+      if (result.success && result.data) {
+        setSpotPriceData({
+          spotPrice: result.data.spotPrice,
+          change: result.data.change,
+          changePercent: result.data.changePercent,
+          lastUpdated: result.data.lastUpdated
+        });
+        return result.data;
+      }
+      
+      return result;
+    } catch (err) {
+      console.error('Error saving spot price to database:', err);
+      return null;
+    }
+  };
+
+  // Function to get the latest spot price directly
+  const getLatestSpotPrice = async () => {
+    try {
+      // First try to get the latest metal price record
+      const response = await fetch('/api/metal-price?forceMetalPrice=true', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch latest spot price');
+      
+      const data = await response.json();
+      console.log('Got latest spot price data:', data);
+      
+      if (data && (data.spotPrice || data.averagePrice)) {
+        setSpotPriceData({
+          spotPrice: data.spotPrice || data.averagePrice || 0,
+          change: data.change || 0,
+          changePercent: data.changePercent || 0,
+          lastUpdated: data.lastUpdated || new Date().toISOString()
+        });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error getting latest spot price:', err);
+      return false;
+    }
+  };
+
+  // Function to fetch data - identical to LMEAluminium
+  const fetchData = async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) {
+        setIsRefreshing(true);
+      }
+      
+      if (!initialFetchRef.current) {
+        setIsLoading(true);
+      }
+      
+      // First try to get the latest spot price directly (fastest way)
+      const gotSpotPrice = await getLatestSpotPrice();
+      
+      // If we couldn't get the spot price, fetch the 3-month price and calculate
+      if (!gotSpotPrice) {
+        // Add cache-busting parameter to prevent stale responses
+        const timestamp = new Date().getTime();
+        const res = await fetch(`/api/price?_t=${timestamp}`, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        if (!res.ok) throw new Error('Failed to fetch data');
+        
+        const data = await res.json();
+        
+        console.log('SynchronizedLiveSpotCard: Received 3-month price data from API:', data);
+        
+        if (data.error) {
+          console.error('Error in data:', data.error);
+        } else {
+          setPriceData(data);
+          
+          // Send the 3-month price to the server to calculate and store the spot price
+          // The calculation will use the change from the previous entry
+          await saveSpotPrice(
+            data.price, 
+            data.timestamp || new Date().toISOString()
+          );
+        }
+      }
+      
+      // Mark initial fetch as complete
+      initialFetchRef.current = true;
+      
+      // Reset retry count on successful fetch
+      retryCountRef.current = 0;
+    } catch (err) {
+      console.error('Error:', err);
+      
+      // Increment retry count
+      retryCountRef.current += 1;
+      
+      if (retryCountRef.current > maxRetries) {
+        // Stop automatic polling if we've reached max retries
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    } finally {
+      if (isManualRefresh) {
+        setIsRefreshing(false);
+      }
+      setIsLoading(false);
+      // Trigger refresh to ensure LiveSpotCard updates
+      setRefreshTrigger(Date.now());
+    }
+  };
+
+  // Manual refresh handler that resets retry count
+  const handleManualRefresh = () => {
+    // Reset retry count when manually refreshing
+    retryCountRef.current = 0;
+    
+    // Restart polling if it was stopped
+    if (!pollIntervalRef.current) {
+      startPolling();
+    }
+    
+    // Trigger global refresh for all price components
+    triggerRefresh();
+    
+    fetchData(true);
+  };
+
+  // Function to start polling
+  const startPolling = () => {
+    // Clear any existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+    
+    // Start a new polling interval
+    pollIntervalRef.current = setInterval(() => {
+      fetchData(false);
+    }, 30000); // 30 seconds polling
+  };
+  
+  // Register for refresh notifications
+  useEffect(() => {
+    // Immediately fetch data when component mounts
+    fetchData(false);
+    
+    // Start polling
+    startPolling();
+    
+    const unregister = registerRefreshListener(() => {
+      console.log("SynchronizedLiveSpotCard received refresh signal");
+      fetchData(true);
+    });
+    
+    // Cleanup function
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+      unregister();
+    };
+  }, [registerRefreshListener]);
+
+  // Add visibility change listener to pause/resume polling when tab is hidden/visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Tab is active again, refresh data and restart polling
+        fetchData(false);
+        startPolling();
+      } else {
+        // Tab is hidden, pause polling to save resources
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+  
+  const { spotPrice, change, changePercent, lastUpdated } = spotPriceData;
+  const isIncrease = change >= 0;
+
+  // Create a component with the same appearance as LiveSpotCard but using the spot price data
+  return (
+    <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-md hover:shadow-lg transition-all duration-200 price-card">
+      <div className="flex items-start justify-between relative z-10 mb-2">
+        <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full flex items-center gap-1.5 font-medium">
+          <Clock className="w-3.5 h-3.5" />
+          <span>Spot Price</span>
+        </div>
+        
+        <div className="flex items-center gap-1 mt-0.5">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
+          >
+            <svg className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        // Loading skeleton
+        <div className="flex-1 flex flex-col justify-center animate-pulse">
+          <div className="h-8 w-32 bg-gray-200 rounded mb-2"></div>
+          <div className="h-5 w-24 bg-gray-200 rounded mb-3"></div>
+          <div className="h-3 w-20 bg-gray-200 rounded"></div>
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono font-bold text-3xl text-indigo-600">
+                ${spotPrice.toFixed(2)}
+              </span>
+              <span className="text-sm text-gray-500">/MT</span>
+            </div>
+
+            <div className={`flex items-center gap-1.5 mt-1 ${isIncrease ? "text-green-600" : "text-red-600"}`}>
+              <div className={`p-0.5 rounded-full ${isIncrease ? "bg-green-100" : "bg-red-100"}`}>
+                {isIncrease ? (
+                  <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 7 7 17M17 7h-5m5 0v5" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m7 17 10-10M7 17h5m-5 0v-5" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-sm font-medium">
+                {isIncrease ? "+" : ""}{change.toFixed(2)} ({changePercent.toFixed(2)}%)
+              </span>
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-500 mt-2">
+            {lastUpdated && typeof lastUpdated === 'string' ? 
+              new Date(lastUpdated).toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric' 
+              }).replace(/ /g, ' ') 
+            : 'No date available'}
+          </div>
+        </>
+      )}
+    </div>
+  );
+});
+
+// We don't need to create wrapper components for MCXAluminium and MonthlyCashSettlement
+// since we've already updated them to use the MetalPriceContext directly
 
 const TopCards = () => {
   return (
@@ -30,17 +344,17 @@ const TopCards = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
           <div className="w-full md:col-span-3">
-            <MemoizedLiveSpotCard />
+            <SynchronizedLiveSpotCard />
           </div>
           <div className="w-full md:col-span-3">
             <div className="monthly-cash-wrapper">
-              <MemoizedMonthlyCashSettlement />
+              <MonthlyCashSettlement />
             </div>
           </div>
           <div className="w-full md:col-span-6">
             {/* Custom styling wrapper for MCXAluminium to control height and width */}
             <div className="mcx-top-card-wrapper">
-              <MemoizedMCXAluminium />
+              <MCXAluminium />
             </div>
             {/* Add custom CSS to modify the MCXAluminium card */}
             <style jsx global>{`
@@ -543,5 +857,8 @@ const TopCards = () => {
     </div>
   );
 };
+
+// Setting display names for components
+SynchronizedLiveSpotCard.displayName = 'SynchronizedLiveSpotCard';
 
 export default memo(TopCards);

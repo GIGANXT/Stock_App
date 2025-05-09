@@ -193,7 +193,7 @@ async function savePriceToDatabase(
     const timeRangeStart = new Date(lastUpdated.getTime() - fiveMinutesMs);
     const timeRangeEnd = new Date(lastUpdated.getTime() + fiveMinutesMs);
     
-    // More comprehensive duplicate check - look for any records in a time range with same price
+    // More comprehensive duplicate check - look for any records in a time range with same change value
     const existingRecords = await prisma.metalPrice.findMany({
       where: {
         metal,
@@ -201,8 +201,8 @@ async function savePriceToDatabase(
           gte: timeRangeStart,
           lte: timeRangeEnd
         },
-        spotPrice: {
-          equals: spotPrice
+        change: {
+          equals: change
         }
       },
       orderBy: {
@@ -212,7 +212,7 @@ async function savePriceToDatabase(
     });
     
     if (existingRecords.length > 0) {
-      console.log(`Found duplicate record within 5-minute window with same price (${spotPrice}), skipping save`);
+      console.log(`Found duplicate record within 5-minute window with same change value (${change}), skipping save`);
       return existingRecords[0];
     }
     
@@ -224,20 +224,20 @@ async function savePriceToDatabase(
       }
     });
     
-    // If we have a recent record with the exact same price, don't save a duplicate
-    if (mostRecentRecord && Number(mostRecentRecord.spotPrice) === spotPrice) {
-      console.log(`Most recent price is identical (${spotPrice}), no need to save duplicate record`);
+    // If we have a recent record with the exact same change value, don't save a duplicate
+    if (mostRecentRecord && Number(mostRecentRecord.change) === change) {
+      console.log(`Most recent change value is identical (${change}), no need to save duplicate record`);
       
       // If the record is older than 6 hours, update the timestamp instead of creating new record
       const sixHoursMs = 6 * 60 * 60 * 1000;
       const now = new Date();
       if (now.getTime() - mostRecentRecord.lastUpdated.getTime() > sixHoursMs) {
-        // Update the timestamp only if price hasn't changed but it's been a while
+        // Update the timestamp only if change hasn't changed but it's been a while
         const updatedRecord = await prisma.metalPrice.update({
           where: { id: mostRecentRecord.id },
           data: { lastUpdated: now }
         });
-        console.log(`Updated timestamp of existing record with same price (${spotPrice})`);
+        console.log(`Updated timestamp of existing record with same change (${change})`);
         return updatedRecord;
       }
       
@@ -248,25 +248,28 @@ async function savePriceToDatabase(
     if (mostRecentRecord) {
       const oneMinuteMs = 60 * 1000;
       const now = new Date();
-      if (now.getTime() - mostRecentRecord.lastUpdated.getTime() < oneMinuteMs) {
-        console.log('Rate limiting: Already added a record within the last minute, skipping');
+      const timeDiff = now.getTime() - mostRecentRecord.lastUpdated.getTime();
+      
+      if (timeDiff < oneMinuteMs) {
+        console.log(`Rate limiting: Not saving new record. Last record was ${Math.round(timeDiff / 1000)} seconds ago.`);
         return mostRecentRecord;
       }
     }
     
-    // Create new record only if we passed all duplicate checks
-    const newRecord = await prisma.metalPrice.create({
+    // Store only the change value in the database
+    // Set spotPrice and changePercent to 0.0 as requested
+    console.log(`Saving record to database with change value ${change}, spotPrice and changePercent set to 0.0`);
+    const record = await prisma.metalPrice.create({
       data: {
         metal,
-        spotPrice,
-        change,
-        changePercent,
+        spotPrice: 0.0,             // Set to 0.0 as requested
+        change: change,             // Keep actual change value
+        changePercent: 0.0,         // Set to 0.0 as requested
         lastUpdated
       }
     });
     
-    console.log(`Added new price record to database: ${metal}, ${spotPrice}, ${lastUpdated}`);
-    return newRecord;
+    return record;
   } catch (error) {
     console.error('Error saving price to database:', error);
     throw error;
