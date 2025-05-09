@@ -1,251 +1,195 @@
 "use client";
 
-import React, { memo, useEffect, useState, useRef } from 'react';
+import React, { memo, useEffect, useState, useRef, useCallback } from 'react';
 import LiveSpotCard from '../Dashboard/LiveSpotCard';
 import MCXAluminium from '../Dashboard/MCXAluminium';
 import MonthlyCashSettlement from '../Dashboard/MonthlyCashSettlement';
 import { useMetalPrice } from '../../context/MetalPriceContext';
-import { Clock } from 'lucide-react';
+import { Clock, RefreshCw } from 'lucide-react';
 
 // Wrapper component that adds context awareness to existing components
 const SynchronizedLiveSpotCard = memo(() => {
-  const { triggerRefresh, registerRefreshListener } = useMetalPrice();
-  const [refreshTrigger, setRefreshTrigger] = useState(Date.now());
+  const { triggerRefresh, registerRefreshListener, sharedSpotPrice, updateSharedSpotPrice, forceSync } = useMetalPrice();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [priceData, setPriceData] = useState({
-    price: 0,
-    change: 0,
-    changePercent: 0,
-    timestamp: ""
-  });
   const [spotPriceData, setSpotPriceData] = useState({
     spotPrice: 0,
     change: 0,
     changePercent: 0,
     lastUpdated: new Date().toISOString()
   });
-  const retryCountRef = useRef(0);
-  const maxRetries = 5;
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const initialFetchRef = useRef(false);
+  const initialSyncDoneRef = useRef(false);
   
-  // Function to save the calculated spot price to database - identical to LMEAluminium
-  const saveSpotPrice = async (threeMonthPrice: number, timestamp: string) => {
-    try {
-      const response = await fetch('/api/spot-price-update', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          threeMonthPrice,
-          timestamp
-        })
-      });
-
-      const result = await response.json();
-      console.log('Saved spot price to database:', result);
-      
-      // If we get a successful response, update the UI with the calculated spot price
-      if (result.success && result.data) {
-        setSpotPriceData({
-          spotPrice: result.data.spotPrice,
-          change: result.data.change,
-          changePercent: result.data.changePercent,
-          lastUpdated: result.data.lastUpdated
-        });
-        return result.data;
-      }
-      
-      return result;
-    } catch (err) {
-      console.error('Error saving spot price to database:', err);
-      return null;
+  // Add an effect to listen for force sync events
+  useEffect(() => {
+    interface SpotPriceData {
+      spotPrice: number;
+      change: number;
+      changePercent: number;
+      lastUpdated: string;
     }
-  };
-
-  // Function to get the latest spot price directly
-  const getLatestSpotPrice = async () => {
-    try {
-      // First try to get the latest metal price record
-      const response = await fetch('/api/metal-price?forceMetalPrice=true', {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch latest spot price');
-      
-      const data = await response.json();
-      console.log('Got latest spot price data:', data);
-      
-      if (data && (data.spotPrice || data.averagePrice)) {
-        setSpotPriceData({
-          spotPrice: data.spotPrice || data.averagePrice || 0,
-          change: data.change || 0,
-          changePercent: data.changePercent || 0,
-          lastUpdated: data.lastUpdated || new Date().toISOString()
-        });
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Error getting latest spot price:', err);
-      return false;
+    
+    interface ForceSyncEvent extends CustomEvent {
+      detail: {
+        spotPriceData: SpotPriceData;
+        source: string;
+      };
     }
-  };
-
-  // Function to fetch data - identical to LMEAluminium
-  const fetchData = async (isManualRefresh = false) => {
-    try {
-      if (isManualRefresh) {
-        setIsRefreshing(true);
+    
+    const handleForceSync = (event: ForceSyncEvent) => {
+      console.log('TopCards: Received force-sync event:', event.detail);
+      
+      // Always update with the shared data, regardless of who sent it
+      if (event.detail && event.detail.spotPriceData) {
+        setSpotPriceData(event.detail.spotPriceData);
+        setIsLoading(false);
+        setIsRefreshing(false);
+        initialFetchRef.current = true;
       }
-      
-      if (!initialFetchRef.current) {
-        setIsLoading(true);
-      }
-      
-      // First try to get the latest spot price directly (fastest way)
-      const gotSpotPrice = await getLatestSpotPrice();
-      
-      // If we couldn't get the spot price, fetch the 3-month price and calculate
-      if (!gotSpotPrice) {
-        // Add cache-busting parameter to prevent stale responses
-        const timestamp = new Date().getTime();
-        const res = await fetch(`/api/price?_t=${timestamp}`, {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
-        
-        if (!res.ok) throw new Error('Failed to fetch data');
-        
-        const data = await res.json();
-        
-        console.log('SynchronizedLiveSpotCard: Received 3-month price data from API:', data);
-        
-        if (data.error) {
-          console.error('Error in data:', data.error);
-        } else {
-          setPriceData(data);
-          
-          // Send the 3-month price to the server to calculate and store the spot price
-          // The calculation will use the change from the previous entry
-          await saveSpotPrice(
-            data.price, 
-            data.timestamp || new Date().toISOString()
-          );
-        }
-      }
-      
-      // Mark initial fetch as complete
-      initialFetchRef.current = true;
-      
-      // Reset retry count on successful fetch
-      retryCountRef.current = 0;
-    } catch (err) {
-      console.error('Error:', err);
-      
-      // Increment retry count
-      retryCountRef.current += 1;
-      
-      if (retryCountRef.current > maxRetries) {
-        // Stop automatic polling if we've reached max retries
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-      }
-    } finally {
-      if (isManualRefresh) {
+    };
+    
+    // Add event listener
+    window.addEventListener('spot-price-force-sync', handleForceSync as EventListener);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('spot-price-force-sync', handleForceSync as EventListener);
+    };
+  }, []);
+  
+  // Listen for spot price sync events from other components
+  useEffect(() => {
+    // Create interface for the custom event
+    interface SpotPriceData {
+      spotPrice: number;
+      change: number;
+      changePercent: number;
+      lastUpdated: string;
+    }
+    
+    interface SpotPriceSyncEvent extends CustomEvent {
+      detail: {
+        spotPriceData: SpotPriceData;
+      };
+    }
+    
+    const handleSpotPriceSync = (event: SpotPriceSyncEvent) => {
+      console.log('TopCards: Received spot-price-sync event:', event.detail);
+      if (event.detail && event.detail.spotPriceData) {
+        setSpotPriceData(event.detail.spotPriceData);
+        setIsLoading(false);
+        initialFetchRef.current = true;
         setIsRefreshing(false);
       }
+    };
+    
+    // Listen for pre-refresh events to show loading state
+    const handlePreRefresh = () => {
+      console.log('TopCards: Received pre-spot-refresh event');
+      setIsRefreshing(true);
+    };
+    
+    // Add event listeners
+    window.addEventListener('spot-price-sync', handleSpotPriceSync as EventListener);
+    window.addEventListener('pre-spot-refresh', handlePreRefresh);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('spot-price-sync', handleSpotPriceSync as EventListener);
+      window.removeEventListener('pre-spot-refresh', handlePreRefresh);
+    };
+  }, []);
+  
+  // Update local state when shared data changes
+  useEffect(() => {
+    if (sharedSpotPrice && sharedSpotPrice.spotPrice > 0) {
+      console.log('SynchronizedLiveSpotCard: Using shared spot price data:', sharedSpotPrice);
+      setSpotPriceData(sharedSpotPrice);
       setIsLoading(false);
-      // Trigger refresh to ensure LiveSpotCard updates
-      setRefreshTrigger(Date.now());
+      initialFetchRef.current = true;
     }
-  };
-
-  // Manual refresh handler that resets retry count
-  const handleManualRefresh = () => {
-    // Reset retry count when manually refreshing
-    retryCountRef.current = 0;
-    
-    // Restart polling if it was stopped
-    if (!pollIntervalRef.current) {
-      startPolling();
+  }, [sharedSpotPrice]);
+  
+  // Request a sync once on component mount
+  useEffect(() => {
+    if (!initialSyncDoneRef.current) {
+      // Mark sync as done to avoid multiple requests
+      initialSyncDoneRef.current = true;
+      
+      // Request data from dashboard component
+      console.log('TopCards: Requesting initial data sync');
+      
+      // First try with direct sync
+      if (typeof window !== 'undefined') {
+        // Create a one-time event to request data
+        const requestEvent = new CustomEvent('spot-price-request-data', {
+          detail: { source: 'TopCards' }
+        });
+        window.dispatchEvent(requestEvent);
+        
+        // Trigger refresh as backup
+        setTimeout(() => {
+          if (!initialFetchRef.current) {
+            triggerRefresh();
+          }
+        }, 500);
+      }
     }
-    
-    // Trigger global refresh for all price components
-    triggerRefresh();
-    
-    fetchData(true);
-  };
-
-  // Function to start polling
-  const startPolling = () => {
-    // Clear any existing interval
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-    }
-    
-    // Start a new polling interval
-    pollIntervalRef.current = setInterval(() => {
-      fetchData(false);
-    }, 30000); // 30 seconds polling
-  };
+  }, [triggerRefresh]);
   
   // Register for refresh notifications
   useEffect(() => {
-    // Immediately fetch data when component mounts
-    fetchData(false);
-    
-    // Start polling
-    startPolling();
-    
     const unregister = registerRefreshListener(() => {
       console.log("SynchronizedLiveSpotCard received refresh signal");
-      fetchData(true);
+      setIsRefreshing(true);
+      
+      // Let other components know we're refreshing
+      window.dispatchEvent(new Event('pre-spot-refresh'));
+      
+      // Request fresh data explicitly
+      const requestEvent = new CustomEvent('spot-price-request-data', {
+        detail: { source: 'TopCards' }
+      });
+      window.dispatchEvent(requestEvent);
+      
+      // Auto-reset refreshing state after 2 seconds if no data arrives
+      const timer = setTimeout(() => {
+        setIsRefreshing(false);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
     });
     
     // Cleanup function
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
       unregister();
     };
   }, [registerRefreshListener]);
 
-  // Add visibility change listener to pause/resume polling when tab is hidden/visible
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Tab is active again, refresh data and restart polling
-        fetchData(false);
-        startPolling();
-      } else {
-        // Tab is hidden, pause polling to save resources
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-      }
-    };
+  // Handle manual refresh
+  const handleManualRefresh = () => {
+    // Set refreshing state to show loading indicator
+    setIsRefreshing(true);
     
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Trigger global refresh for all price components
+    triggerRefresh();
     
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-  
+    // Emit a pre-refresh event so other components can prepare
+    window.dispatchEvent(new Event('pre-spot-refresh'));
+    
+    // Request data from LMEAluminium specifically
+    const requestEvent = new CustomEvent('spot-price-request-data', {
+      detail: { source: 'TopCards' }
+    });
+    window.dispatchEvent(requestEvent);
+    
+    // Auto-reset refreshing state after 2 seconds if no data arrives
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 2000);
+  };
+
   const { spotPrice, change, changePercent, lastUpdated } = spotPriceData;
   const isIncrease = change >= 0;
 
@@ -258,17 +202,15 @@ const SynchronizedLiveSpotCard = memo(() => {
           <span>Spot Price</span>
         </div>
         
-        <div className="flex items-center gap-1 mt-0.5">
-          <button
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-            className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
-          >
-            <svg className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
-          </button>
-        </div>
+        {/* Add refresh button */}
+        <button
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+          className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
+          aria-label="Refresh spot price"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
       {isLoading ? (
