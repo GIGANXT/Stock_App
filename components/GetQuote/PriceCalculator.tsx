@@ -5,6 +5,7 @@ import { Calculator, Wifi, WifiOff, Loader2, ArrowRight, Sparkles, Calendar } fr
 import { useMCXPrice } from '../../hook/useMCXPrice';
 import { useLMEPrice } from '../../hook/useLMEPrice';
 import { useExchangeRates } from '../../hook/useExchangeRates';
+import { useMetalPrice } from '../../context/MetalPriceContext';
 
 interface PriceCalculatorProps {
   className?: string;
@@ -18,18 +19,6 @@ interface MonthlyCashSettlementResponse {
   dataPointsCount?: number;
   month?: number;
   year?: number;
-  message?: string;
-}
-
-// Interface for the metal price API response
-interface MetalPriceResponse {
-  type: 'spotPrice' | 'averagePrice' | 'noData' | 'cashSettlement';
-  spotPrice?: number;
-  averagePrice?: number;
-  change?: number;
-  changePercent?: number;
-  lastUpdated?: string;
-  dataPointsCount?: number;
   message?: string;
 }
 
@@ -65,6 +54,7 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   const { priceData: mcxPriceData, loading: mcxLoading, error: mcxError } = useMCXPrice();
   const { priceData: lmePriceData, loading: lmeLoading, error: lmeError } = useLMEPrice();
   const { ratesData, loading: ratesLoading, error: ratesError } = useExchangeRates();
+  const { sharedSpotPrice, registerRefreshListener, triggerRefresh } = useMetalPrice();
 
   const DUTY_FACTOR = 1.0825;
   const RBI_RATE = ratesData?.RBI || 0;
@@ -82,53 +72,182 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [loadingMonths, setLoadingMonths] = useState(false);
 
-  // Add a new function to fetch live spot price data
-  const fetchLiveSpotPrice = async () => {
-    try {
-      setIsLmePriceUpdating(true);
+  // Add useEffect to listen for spot price changes from context
+  useEffect(() => {
+    if (sharedSpotPrice && sharedSpotPrice.spotPrice > 0 && isLmeLiveMode) {
+      // Update the LME price with the shared spot price
+      setLmePrice(sharedSpotPrice.spotPrice.toFixed(2));
+      setLmeLastUpdate(new Date(sharedSpotPrice.lastUpdated || new Date()));
       
-      // Use the same API endpoint as LiveSpotCard component
-      const response = await fetch('/api/metal-price?forceMetalPrice=true', {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        }
-      });
+      // Clear any monthly data display indicators
+      setMonthlyCashSettlementData(null);
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch live spot price: ${response.status}`);
+      // Provide visual feedback
+      if (lmePriceFieldRef.current) {
+        lmePriceFieldRef.current.classList.add('bg-green-50');
+        setTimeout(() => {
+          lmePriceFieldRef.current?.classList.remove('bg-green-50');
+        }, 1000);
       }
       
-      const data = await response.json();
-      
-      if (data.type === 'noData') {
-        throw new Error(data.message || 'No price data available');
-      }
-      
-      // Use spotPrice from the response
-      if (data.spotPrice !== undefined) {
-        setLmePrice(data.spotPrice.toFixed(2));
-        setLmeLastUpdate(new Date(data.lastUpdated || new Date()));
+      setIsLmePriceUpdating(false);
+    }
+  }, [sharedSpotPrice, isLmeLiveMode]);
+
+  // Add event listeners for global spot price events
+  useEffect(() => {
+    // Create interface for the custom event
+    interface SpotPriceData {
+      spotPrice: number;
+      change: number;
+      changePercent: number;
+      lastUpdated: string;
+    }
+    
+    interface SpotPriceSyncEvent extends CustomEvent {
+      detail: {
+        spotPriceData: SpotPriceData;
+      };
+    }
+    
+    const handleSpotPriceSync = (event: SpotPriceSyncEvent) => {
+      if (isLmeLiveMode && event.detail && event.detail.spotPriceData) {
+        const { spotPrice, lastUpdated } = event.detail.spotPriceData;
         
-        // Clear any monthly data display indicators
-        setMonthlyCashSettlementData(null);
+        // Update LME price with the new spot price
+        setLmePrice(spotPrice.toFixed(2));
+        setLmeLastUpdate(new Date(lastUpdated || new Date()));
         
-        // Provide visual feedback
+        // Provide visual feedback for auto-update
+        setIsLmePriceUpdating(true);
+        setTimeout(() => {
+          setIsLmePriceUpdating(false);
+        }, 1000);
+        
         if (lmePriceFieldRef.current) {
           lmePriceFieldRef.current.classList.add('bg-green-50');
           setTimeout(() => {
             lmePriceFieldRef.current?.classList.remove('bg-green-50');
           }, 1000);
         }
-      } else {
-        throw new Error('Live spot price data is missing');
       }
+    };
+    
+    // Listen for pre-refresh events
+    const handlePreRefresh = () => {
+      if (isLmeLiveMode) {
+        setIsLmePriceUpdating(true);
+        // Auto-dismiss after 2 seconds if no update occurs
+        setTimeout(() => setIsLmePriceUpdating(false), 2000);
+      }
+    };
+    
+    // Add event listeners
+    window.addEventListener('spot-price-sync', handleSpotPriceSync as EventListener);
+    window.addEventListener('pre-spot-refresh', handlePreRefresh);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('spot-price-sync', handleSpotPriceSync as EventListener);
+      window.removeEventListener('pre-spot-refresh', handlePreRefresh);
+    };
+  }, [isLmeLiveMode]);
+
+  // Register for refresh notifications
+  useEffect(() => {
+    const unregister = registerRefreshListener(() => {
+      if (isLmeLiveMode) {
+        console.log("PriceCalculator received refresh signal");
+        setIsLmePriceUpdating(true);
+        
+        // Auto-reset refreshing state after 2 seconds if no data arrives
+        const timer = setTimeout(() => {
+          setIsLmePriceUpdating(false);
+        }, 2000);
+        
+        return () => clearTimeout(timer);
+      }
+    });
+    
+    // Cleanup function
+    return () => {
+      unregister();
+    };
+  }, [registerRefreshListener, isLmeLiveMode]);
+
+  // Add a new function to fetch live spot price data
+  const fetchLiveSpotPrice = async () => {
+    try {
+      setIsLmePriceUpdating(true);
+      
+      // Request data from LMEAluminium component
+      window.dispatchEvent(new CustomEvent('spot-price-request-data', {
+        detail: { source: 'PriceCalculator' }
+      }));
+      
+      // As a fallback, fetch directly from API if no response in 1 second
+      const fallbackTimer = setTimeout(async () => {
+        try {
+          // Use the same API endpoint as LiveSpotCard component
+          const response = await fetch('/api/metal-price?forceMetalPrice=true', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch live spot price: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (data.type === 'noData') {
+            throw new Error(data.message || 'No price data available');
+          }
+          
+          // Use spotPrice from the response
+          if (data.spotPrice !== undefined) {
+            setLmePrice(data.spotPrice.toFixed(2));
+            setLmeLastUpdate(new Date(data.lastUpdated || new Date()));
+            
+            // Clear any monthly data display indicators
+            setMonthlyCashSettlementData(null);
+            
+            // Provide visual feedback
+            if (lmePriceFieldRef.current) {
+              lmePriceFieldRef.current.classList.add('bg-green-50');
+              setTimeout(() => {
+                lmePriceFieldRef.current?.classList.remove('bg-green-50');
+              }, 1000);
+            }
+          } else {
+            throw new Error('Live spot price data is missing');
+          }
+        } catch (error) {
+          console.error('Error in fallback fetch live spot price:', error);
+          setLmeConnectionError(error instanceof Error ? error.message : 'Failed to fetch live spot price data');
+          // If error occurs, switch back to manual mode
+          setIsLmeLiveMode(false);
+        } finally {
+          setIsLmePriceUpdating(false);
+        }
+      }, 1000);
+      
+      // Check if shared context already has data
+      if (sharedSpotPrice && sharedSpotPrice.spotPrice > 0) {
+        clearTimeout(fallbackTimer);
+        setLmePrice(sharedSpotPrice.spotPrice.toFixed(2));
+        setLmeLastUpdate(new Date(sharedSpotPrice.lastUpdated || new Date()));
+        setIsLmePriceUpdating(false);
+      }
+      
+      return () => clearTimeout(fallbackTimer);
     } catch (error) {
       console.error('Error fetching live spot price:', error);
       setLmeConnectionError(error instanceof Error ? error.message : 'Failed to fetch live spot price data');
       // If error occurs, switch back to manual mode
       setIsLmeLiveMode(false);
-    } finally {
       setIsLmePriceUpdating(false);
     }
   };
@@ -145,7 +264,14 @@ export default function PriceCalculator({ className }: PriceCalculatorProps) {
       fetchLiveSpotPrice();
       
       // Set up regular polling for live data
-      const intervalId = setInterval(fetchLiveSpotPrice, 60000); // Refresh every minute
+      const intervalId = setInterval(() => {
+        // Use triggerRefresh to synchronize with other components
+        triggerRefresh();
+        
+        // Also fetch directly in case context is not updated
+        fetchLiveSpotPrice();
+      }, 60000); // Refresh every minute
+      
       setLiveDataIntervalId(intervalId);
     } else {
       // Switching to manual mode
